@@ -30,20 +30,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
       final stopwatch = Stopwatch()..start();
 
-      // Supabase connectivity check
-      await Supabase.instance.client
-          .from('app_health')
-          .select()
-          .limit(1);
-
-      // Ensure splash shows at least 1 second
-      final elapsed = stopwatch.elapsedMilliseconds;
-
-      if (elapsed < 1000) {
-        await Future.delayed(
-          Duration(milliseconds: 1000 - elapsed),
-        );
-      }
+      // Minimum splash duration
+      await Future.delayed(const Duration(milliseconds: 1000));
 
       if (!mounted) return;
 
@@ -105,12 +93,12 @@ class _SplashScreenState extends State<SplashScreen> {
                   MainAxisAlignment.center,
               children: [
                 const Icon(
-                  Icons.cloud_off_rounded,
+                  Icons.error_outline_rounded,
                   size: 80,
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Unable to connect',
+                  'Startup Failed',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w600,
@@ -119,7 +107,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 const SizedBox(height: 12),
                 Text(
                   _error ??
-                      'Please check your internet connection and try again.',
+                      'An unexpected error occurred.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
