@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
@@ -349,96 +350,225 @@ class _QuickActionBtn extends StatelessWidget {
   }
 }
 
-class SupervisorDashboardScreen extends ConsumerWidget {
+class SupervisorDashboardScreen extends ConsumerStatefulWidget {
   const SupervisorDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SupervisorDashboardScreen> createState() =>
+      _SupervisorDashboardScreenState();
+}
+
+class _SupervisorDashboardScreenState
+    extends ConsumerState<SupervisorDashboardScreen> {
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final profile = ref.watch(currentProfileProvider).valueOrNull;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dashboard'),
         actions: [
-          IconButton(icon: const Icon(Icons.notifications_outlined), onPressed: () => context.push('/notifications')),
-          IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () => context.push('/settings')),
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () => context.push('/notifications'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => context.push('/settings'),
+          ),
         ],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _loadSupervisorStats(ref, profile?.id),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
           final stats = snapshot.data!;
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.primary600, AppColors.primary400]),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      const CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Colors.white24,
-                        child: Icon(Icons.person_rounded, color: Colors.white, size: 28),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Welcome, ${profile?.fullName ?? 'Supervisor'}', style: const TextStyle(color: Colors.white, fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w600)),
-                          Text(DateFormat('EEEE, dd MMM').format(DateTime.now()), style: const TextStyle(color: Color(0xCCFFFFFF), fontFamily: 'Inter', fontSize: 12)),
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          AppColors.primary600,
+                          AppColors.primary400,
                         ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        const CircleAvatar(
+                          radius: 24,
+                          backgroundColor: Colors.white24,
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Welcome, ${profile?.fullName ?? 'Supervisor'}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Inter',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              DateFormat('EEEE, dd MMM')
+                                  .format(DateTime.now()),
+                              style: const TextStyle(
+                                color: Color(0xCCFFFFFF),
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  const w.SectionHeader(
+                    title: 'Today\'s Status',
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics:
+                        const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1.15,
+                    children: [
+                      w.StatCard(
+                        title: 'Employees',
+                        value:
+                            '${stats['total_employees']}',
+                        icon: Icons.people_outline,
+                        color: AppColors.primary500,
+                      ),
+                      w.StatCard(
+                        title: 'Attendance Today',
+                        value: stats['today_submitted'] ==
+                                true
+                            ? 'Submitted'
+                            : 'Pending',
+                        icon:
+                            Icons.calendar_today_outlined,
+                        color: stats['today_submitted'] ==
+                                true
+                            ? AppColors.success500
+                            : AppColors.accent500,
+                      ),
+                      w.StatCard(
+                        title: 'Pending Expenses',
+                        value:
+                            '${stats['pending_expenses']}',
+                        icon:
+                            Icons.receipt_long_outlined,
+                        color: AppColors.accent500,
+                      ),
+                      w.StatCard(
+                        title: 'Total Expenses',
+                        value: CurrencyUtils
+                            .formatCompact(
+                          stats['total_expenses'] ?? 0,
+                        ),
+                        icon:
+                            Icons.account_balance_wallet_outlined,
+                        color: AppColors.secondary500,
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 20),
-                const w.SectionHeader(title: 'Today\'s Status'),
-                const SizedBox(height: 12),
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.15,
-                  children: [
-                    w.StatCard(title: 'Employees', value: '${stats['total_employees']}', icon: Icons.people_outline, color: AppColors.primary500),
-                    w.StatCard(title: 'Attendance Today', value: stats['today_submitted'] == true ? 'Submitted' : 'Pending', icon: Icons.calendar_today_outlined, color: stats['today_submitted'] == true ? AppColors.success500 : AppColors.accent500),
-                    w.StatCard(title: 'Pending Expenses', value: '${stats['pending_expenses']}', icon: Icons.receipt_long_outlined, color: AppColors.accent500),
-                    w.StatCard(title: 'Total Expenses', value: CurrencyUtils.formatCompact(
-  stats['total_expenses'] ?? 0,
-), icon: Icons.account_balance_wallet_outlined, color: AppColors.secondary500),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.calendar_today_rounded, size: 18),
-                        label: const Text('Mark Attendance'),
-                        onPressed: () => context.push('/attendance/new'),
+
+                  const SizedBox(height: 24),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(
+                            Icons.calendar_today_rounded,
+                            size: 18,
+                          ),
+                          label:
+                              const Text('Mark Attendance'),
+                          onPressed: () => context.push(
+                            '/attendance/new',
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.add_rounded, size: 18),
-                        label: const Text('Add Expense'),
-                        onPressed: () => context.push('/expenses/new'),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(
+                            Icons.add_rounded,
+                            size: 18,
+                          ),
+                          label:
+                              const Text('Add Expense'),
+                          onPressed: () => context.push(
+                            '/expenses/new',
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+
+                  const SizedBox(height: 100),
+                ],
+              ),
             ),
           );
         },
@@ -447,83 +577,78 @@ class SupervisorDashboardScreen extends ConsumerWidget {
   }
 
   Future<Map<String, dynamic>> _loadSupervisorStats(
-  WidgetRef ref,
-  String? profileId,
-) async {
-  if (profileId == null) {
+    WidgetRef ref,
+    String? profileId,
+  ) async {
+    if (profileId == null) {
+      return {
+        'total_employees': 0,
+        'today_submitted': false,
+        'pending_expenses': 0,
+        'total_expenses': 0.0,
+      };
+    }
+
+    final client = ref.read(supabaseProvider);
+
+    final sup = await client
+        .from('supervisors')
+        .select('id')
+        .eq('profile_id', profileId)
+        .maybeSingle();
+
+    if (sup == null) {
+      return {
+        'total_employees': 0,
+        'today_submitted': false,
+        'pending_expenses': 0,
+        'total_expenses': 0.0,
+      };
+    }
+
+    final supervisorId = sup['id'] as String;
+
+    final employees = await client
+        .from('supervisor_employees')
+        .select('id')
+        .eq('supervisor_id', supervisorId);
+
+    final today =
+        DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    final todayAtt = await client
+        .from('attendance')
+        .select('id')
+        .eq('supervisor_id', supervisorId)
+        .eq('attendance_date', today)
+        .maybeSingle();
+
+    final pendingExp = await client
+        .from('expenses')
+        .select('id')
+        .eq('supervisor_id', supervisorId)
+        .eq('status', 'pending');
+
+    final totalExp = await client
+        .from('expenses')
+        .select('amount')
+        .eq('supervisor_id', supervisorId);
+
+    final totalExpenseAmount =
+        (totalExp as List).fold<double>(
+      0,
+      (sum, row) =>
+          sum +
+          ((row['amount'] as num?)?.toDouble() ?? 0),
+    );
+
     return {
-      'total_employees': 0,
-      'today_submitted': false,
-      'pending_expenses': 0,
-      'total_expenses': 0.0,
+      'total_employees':
+          (employees as List).length,
+      'today_submitted': todayAtt != null,
+      'pending_expenses':
+          (pendingExp as List).length,
+      'total_expenses': totalExpenseAmount,
     };
   }
-
-  final client = ref.read(supabaseProvider);
-
-  final sup = await client
-      .from('supervisors')
-      .select('id')
-      .eq('profile_id', profileId)
-      .maybeSingle();
-
-  if (sup == null) {
-    return {
-      'total_employees': 0,
-      'today_submitted': false,
-      'pending_expenses': 0,
-      'total_expenses': 0.0,
-    };
-  }
-
-  final supervisorId = sup['id'] as String;
-
-  final employees = await client
-      .from('supervisor_employees')
-      .select('id')
-      .eq('supervisor_id', supervisorId);
-
-  final today = DateFormat('yyyy-MM-dd').format(
-    DateTime.now(),
-  );
-
-  final todayAtt = await client
-      .from('attendance')
-      .select('id')
-      .eq('supervisor_id', supervisorId)
-      .eq('attendance_date', today)
-      .maybeSingle();
-
-  final pendingExp = await client
-      .from('expenses')
-      .select('id')
-      .eq('supervisor_id', supervisorId)
-      .eq('status', 'pending');
-
-  final totalExp = await client
-      .from('expenses')
-      .select('amount')
-      .eq('supervisor_id', supervisorId);
-
-  final totalExpenseAmount =
-      (totalExp as List).fold<double>(
-    0,
-    (sum, row) =>
-        sum +
-        ((row['amount'] as num?)
-                ?.toDouble() ??
-            0),
-  );
-
-  return {
-    'total_employees':
-        (employees as List).length,
-    'today_submitted':
-        todayAtt != null,
-    'pending_expenses':
-        (pendingExp as List).length,
-    'total_expenses':
-        totalExpenseAmount,
-  };
-}
 }
