@@ -1,8 +1,9 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:typed_data';
+import '../../core/errors/exceptions.dart' as app_errors;
 
-import '../models/app_models.dart';
-import '../../core/errors/exceptions.dart';
+import '../models/app_models.dart;
 
 final supabaseProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
@@ -42,7 +43,7 @@ class AuthRepository {
     try {
       return await _client.auth.signInWithPassword(email: email, password: password);
     } on AuthException catch (e) {
-      throw AuthException(e.message);
+      throw app_errors.AuthException(e.message);
     }
   }
 
@@ -57,7 +58,7 @@ class AuthRepository {
           .maybeSingle();
 
       if (supervisorData == null) {
-        throw const AuthException('Invalid ID or password');
+        throw app_errors.AuthException('Invalid ID or password');
       }
 
       return await _client.auth.signInWithPassword(
@@ -67,7 +68,7 @@ class AuthRepository {
     } on AuthException {
       rethrow;
     } catch (e) {
-      throw AuthException('Sign in failed: $e');
+      throw app_errors.AuthException('Sign in failed: $e');
     }
   }
 
@@ -75,7 +76,7 @@ class AuthRepository {
     try {
       await _client.auth.resetPasswordForEmail(email);
     } on AuthException catch (e) {
-      throw AuthException(e.message);
+      throw app_errors.AuthException(e.message);
     }
   }
 
@@ -83,7 +84,7 @@ class AuthRepository {
     try {
       return await _client.auth.updateUser(UserAttributes(password: newPassword));
     } on AuthException catch (e) {
-      throw AuthException(e.message);
+      throw app_errors.AuthException(e.message);
     }
   }
 
@@ -91,7 +92,7 @@ class AuthRepository {
     try {
       await _client.auth.signOut();
     } on AuthException catch (e) {
-      throw AuthException(e.message);
+      throw app_errors.AuthException(e.message);
     }
   }
 
