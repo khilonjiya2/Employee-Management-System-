@@ -328,10 +328,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
 
-    if (confirm == true && mounted) {
-      await ref.read(authRepositoryProvider).signOut();
-      if (mounted) context.go('/login');
-    }
+    if (confirm == true) {
+  await ref.read(authRepositoryProvider).signOut();
+
+  ref.invalidate(currentProfileProvider);
+
+  if (mounted) {
+    context.go('/login');
+  }
+}
   }
 }
 
