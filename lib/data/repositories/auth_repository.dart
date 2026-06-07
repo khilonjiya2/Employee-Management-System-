@@ -216,16 +216,39 @@ class EmployeeRepository {
 }
 
   Future<EmployeeModel> update(String id, Map<String, dynamic> data) async {
-    final result = await _client
-        .from('employees')
-        .update(data)
-        .eq('id', id)
-        .select('*, departments(name)')
-        .single();
+  final supervisorId = data.remove('supervisor_id');
 
-    await _logAudit('employee_updated', 'employees', id, null, result);
-    return EmployeeModel.fromJson(result);
+  final result = await _client
+      .from('employees')
+      .update(data)
+      .eq('id', id)
+      .select('*, departments(name)')
+      .single();
+
+  if (supervisorId != null) {
+    await _client
+        .from('supervisor_employees')
+        .delete()
+        .eq('employee_id', id);
+
+    await _client
+        .from('supervisor_employees')
+        .insert({
+          'employee_id': id,
+          'supervisor_id': supervisorId,
+        });
   }
+
+  await _logAudit(
+    'employee_updated',
+    'employees',
+    id,
+    null,
+    result,
+  );
+
+  return EmployeeModel.fromJson(result);
+}
 
   Future<void> delete(String id) async {
     await _client.from('employees').delete().eq('id', id);
