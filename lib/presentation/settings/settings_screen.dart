@@ -334,7 +334,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   ref.invalidate(currentProfileProvider);
 
   if (mounted) {
-    context.go('/login');
+    context.go('/splash');
   }
 }
   }
