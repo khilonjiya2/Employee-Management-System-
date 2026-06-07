@@ -269,28 +269,39 @@ class SupervisorRepository {
     return SupervisorModel.fromJson(data);
   }
 
-  Future<SupervisorModel> create(Map<String, dynamic> supervisorData, String password) async {
-    final code = await _client.rpc('generate_supervisor_code') as String;
-    supervisorData['supervisor_code'] = code;
-    supervisorData['created_by'] = _client.auth.currentUser?.id;
+  Future<SupervisorModel> create(
+  Map<String, dynamic> supervisorData,
+  String password,
+) async {
+  final code = await _client.rpc('generate_supervisor_code') as String;
 
-    // Create auth user via Admin API
-    final authResponse = await _client.auth.admin.createUser(
-      AdminUserAttributes(
-        email: supervisorData['email'] as String,
-        password: password,
-        userMetadata: {
-          'full_name': supervisorData['name'],
-          'role': 'supervisor',
-        },
-        emailConfirm: true,
-      ),
+  final response = await _client.functions.invoke(
+    'create-supervisor',
+    body: {
+      'email': supervisorData['email'],
+      'password': password,
+      'full_name': supervisorData['name'],
+      'mobile': supervisorData['mobile'],
+      'assigned_area': supervisorData['assigned_area'],
+      'supervisor_code': code,
+    },
+  );
+
+  if (response.status != 200) {
+    throw Exception(
+      response.data?['error'] ??
+      'Failed to create supervisor',
     );
-
-    supervisorData['profile_id'] = authResponse.user?.id;
-    final result = await _client.from('supervisors').insert(supervisorData).select().single();
-    return SupervisorModel.fromJson(result);
   }
+
+  final supervisor = await _client
+      .from('supervisors')
+      .select()
+      .eq('supervisor_code', code)
+      .single();
+
+  return SupervisorModel.fromJson(supervisor);
+}
 
   Future<SupervisorModel> update(String id, Map<String, dynamic> data) async {
     final result = await _client.from('supervisors').update(data).eq('id', id).select().single();
