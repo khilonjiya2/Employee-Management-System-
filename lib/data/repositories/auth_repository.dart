@@ -225,18 +225,19 @@ class EmployeeRepository {
       .select('*, departments(name)')
       .single();
 
-  if (supervisorId != null) {
-    await _client
-        .from('supervisor_employees')
-        .delete()
-        .eq('employee_id', id);
+  await _client
+    .from('supervisor_employees')
+    .delete()
+    .eq('employee_id', id);
 
-    await _client
-        .from('supervisor_employees')
-        .insert({
-          'employee_id': id,
-          'supervisor_id': supervisorId,
-        });
+if (supervisorId != null) {
+  await _client
+      .from('supervisor_employees')
+      .insert({
+        'employee_id': id,
+        'supervisor_id': supervisorId,
+      });
+
   }
 
   await _logAudit(
