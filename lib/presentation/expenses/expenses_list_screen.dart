@@ -297,10 +297,29 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       }
 
       if (_receipt != null) {
-        final bytes = await _receipt!.readAsBytes();
-        final ext = _receipt!.path.split('.').last;
-        await repo.uploadAttachment(expense.id, bytes, 'receipt.$ext', 'image/$ext', isReceipt: true);
-      }
+  final bytes = await _receipt!.readAsBytes();
+  final ext = _receipt!.path.split('.').last.toLowerCase();
+
+  String mimeType;
+
+  if (ext == 'jpg' || ext == 'jpeg') {
+    mimeType = 'image/jpeg';
+  } else if (ext == 'png') {
+    mimeType = 'image/png';
+  } else if (ext == 'pdf') {
+    mimeType = 'application/pdf';
+  } else {
+    mimeType = 'application/octet-stream';
+  }
+
+  await repo.uploadAttachment(
+    expense.id,
+    bytes,
+    'receipt.$ext',
+    mimeType,
+    isReceipt: true,
+  );
+}
 
       for (final att in _attachments) {
         final bytes = await att.readAsBytes();
