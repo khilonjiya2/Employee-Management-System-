@@ -47,18 +47,23 @@ class AuthRepository {
     }
   }
 
-  Future<AuthResponse> signInWithEmployeeId(String employeeId, String password) async {
+  Future<AuthResponse> signInWithEmployeeId(
+    String employeeId,
+    String password,
+  ) async {
     try {
-      // Look up email from supervisor/employee code
       final supervisorData = await _client
           .from('supervisors')
-          .select('email')
-          .eq('supervisor_code', employeeId.toUpperCase())
-          .eq('is_active', true)
+          .select('email,is_active')
+          .eq('supervisor_code', employeeId.trim().toUpperCase())
           .maybeSingle();
 
       if (supervisorData == null) {
         throw app_errors.AuthException('Invalid ID or password');
+      }
+
+      if (supervisorData['is_active'] != true) {
+        throw app_errors.AuthException('Supervisor account is inactive');
       }
 
       return await _client.auth.signInWithPassword(
@@ -107,14 +112,25 @@ class AuthRepository {
     return ProfileModel.fromJson(data);
   }
 
-  Future<void> saveFcmToken(String token, String platform) async {
+  Future<void> saveFcmToken(
+    String token,
+    String platform,
+  ) async {
     final user = _client.auth.currentUser;
     if (user == null) return;
-    await _client.from('fcm_tokens').upsert({
-      'user_id': user.id,
-      'token': token,
-      'platform': platform,
-    }, onConflict: 'user_id, token');
+    try {
+      await _client.from('fcm_tokens').upsert(
+        {
+          'user_id': user.id,
+          'token': token,
+          'platform': platform,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        onConflict: 'token',
+      );
+    } catch (_) {
+      // Ignore token save failures
+    }
   }
 }
 
@@ -198,10 +214,13 @@ class EmployeeRepository {
     await _logAudit('employee_deleted', 'employees', id, null, null);
   }
 
+  // Fix #2: Uint8List.fromList instead of unsafe cast
   Future<void> uploadPhoto(String employeeId, List<int> fileBytes, String fileName) async {
     final userId = _client.auth.currentUser?.id ?? 'unknown';
     final path = '$userId/$employeeId/$fileName';
-    await _client.storage.from('employee_photos').uploadBinary(path, fileBytes as Uint8List);
+    await _client.storage
+        .from('employee_photos')
+        .uploadBinary(path, Uint8List.fromList(fileBytes));
     final url = _client.storage.from('employee_photos').getPublicUrl(path);
     await _client.from('employees').update({'employee_photo_url': url}).eq('id', employeeId);
   }
@@ -237,9 +256,13 @@ final supervisorRepositoryProvider = Provider<SupervisorRepository>((ref) {
 
 class SupervisorRepository {
   final SupabaseClient _client;
+
   SupervisorRepository(this._client);
 
-  Future<List<SupervisorModel>> getAll({String? search, bool? isActive}) async {
+  Future<List<SupervisorModel>> getAll({
+    String? search,
+    bool? isActive,
+  }) async {
     // Apply all filters on the PostgrestFilterBuilder before calling .order(),
     // which would promote the builder to PostgrestTransformBuilder.
     var filterQuery = _client.from('supervisors').select();
@@ -248,68 +271,105 @@ class SupervisorRepository {
       filterQuery = filterQuery.eq('is_active', isActive);
     }
 
-    if (search != null && search.isNotEmpty) {
-      filterQuery = filterQuery.or('name.ilike.%$search%,supervisor_code.ilike.%$search%,email.ilike.%$search%');
+    if (search != null && search.trim().isNotEmpty) {
+      filterQuery = filterQuery.or(
+        'name.ilike.%$search%,email.ilike.%$search%,supervisor_code.ilike.%$search%',
+      );
     }
 
-    final data = await filterQuery.order('name');
+    final result = await filterQuery.order('created_at', ascending: false);
 
-    return (data as List).map((s) => SupervisorModel.fromJson(s as Map<String, dynamic>)).toList();
+    return (result as List)
+        .map((e) => SupervisorModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<SupervisorModel?> getById(String id) async {
-    final data = await _client.from('supervisors').select().eq('id', id).maybeSingle();
+    final data = await _client
+        .from('supervisors')
+        .select()
+        .eq('id', id)
+        .maybeSingle();
     if (data == null) return null;
     return SupervisorModel.fromJson(data);
   }
 
   Future<SupervisorModel?> getByProfileId(String profileId) async {
-    final data = await _client.from('supervisors').select().eq('profile_id', profileId).maybeSingle();
+    final data = await _client
+        .from('supervisors')
+        .select()
+        .eq('profile_id', profileId)
+        .maybeSingle();
     if (data == null) return null;
     return SupervisorModel.fromJson(data);
   }
 
   Future<SupervisorModel> create(
-  Map<String, dynamic> supervisorData,
-  String password,
-) async {
-  final code = await _client.rpc('generate_supervisor_code') as String;
-
-  final response = await _client.functions.invoke(
-    'create-supervisor',
-    body: {
-      'email': supervisorData['email'],
-      'password': password,
-      'full_name': supervisorData['name'],
-      'mobile': supervisorData['mobile'],
-      'assigned_area': supervisorData['assigned_area'],
-      'supervisor_code': code,
-    },
-  );
-
-  if (response.status != 200) {
-    throw Exception(
-      response.data?['error'] ??
-      'Failed to create supervisor',
+    Map<String, dynamic> supervisorData,
+    String password,
+  ) async {
+    final response = await _client.functions.invoke(
+      'create-supervisor',
+      body: {
+        'email': supervisorData['email'],
+        'password': password,
+        'name': supervisorData['name'],
+        'mobile': supervisorData['mobile'],
+      },
     );
+
+    // Fix #6: safe cast of response.data before key access
+    final responseData = response.data as Map<String, dynamic>?;
+
+    if (response.status != 200) {
+      throw Exception(
+        responseData?['error'] ?? 'Failed to create supervisor',
+      );
+    }
+
+    // Fix #4: typed extraction of supervisor_code
+    final supervisorCode = responseData!['supervisor_code'] as String;
+
+    final supervisor = await _client
+        .from('supervisors')
+        .select()
+        .eq('supervisor_code', supervisorCode)
+        .single();
+
+    return SupervisorModel.fromJson(supervisor);
   }
 
-  final supervisor = await _client
-      .from('supervisors')
-      .select()
-      .eq('supervisor_code', code)
-      .single();
-
-  return SupervisorModel.fromJson(supervisor);
-}
-
   Future<SupervisorModel> update(String id, Map<String, dynamic> data) async {
-    final result = await _client.from('supervisors').update(data).eq('id', id).select().single();
+    final result = await _client
+        .from('supervisors')
+        .update({
+          ...data,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
     return SupervisorModel.fromJson(result);
   }
 
   Future<void> delete(String id) async {
+    final supervisor = await _client
+        .from('supervisors')
+        .select('profile_id')
+        .eq('id', id)
+        .maybeSingle();
+
     await _client.from('supervisors').delete().eq('id', id);
+
+    if (supervisor != null && supervisor['profile_id'] != null) {
+      try {
+        await _client.functions.invoke(
+          'delete-supervisor',
+          body: {'user_id': supervisor['profile_id']},
+        );
+      } catch (_) {}
+    }
   }
 
   Future<List<EmployeeModel>> getAssignedEmployees(String supervisorId) async {
@@ -317,10 +377,23 @@ class SupervisorRepository {
         .from('supervisor_employees')
         .select('employees(*, departments(name))')
         .eq('supervisor_id', supervisorId);
-    return (data as List).map((row) => EmployeeModel.fromJson(row['employees'] as Map<String, dynamic>)).toList();
+
+    return (data as List)
+        .where((row) => row['employees'] != null)
+        .map((row) => EmployeeModel.fromJson(row['employees'] as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> assignEmployee(String supervisorId, String employeeId) async {
+    final existing = await _client
+        .from('supervisor_employees')
+        .select('id')
+        .eq('supervisor_id', supervisorId)
+        .eq('employee_id', employeeId)
+        .maybeSingle();
+
+    if (existing != null) return;
+
     await _client.from('supervisor_employees').insert({
       'supervisor_id': supervisorId,
       'employee_id': employeeId,
@@ -328,7 +401,8 @@ class SupervisorRepository {
   }
 
   Future<void> removeEmployee(String supervisorId, String employeeId) async {
-    await _client.from('supervisor_employees')
+    await _client
+        .from('supervisor_employees')
         .delete()
         .eq('supervisor_id', supervisorId)
         .eq('employee_id', employeeId);
@@ -564,10 +638,17 @@ class ExpenseRepository {
     await _logAudit('expense_rejected', 'expenses', id);
   }
 
+  // Fix #3: Uint8List.fromList instead of unsafe cast
   Future<String> uploadAttachment(String expenseId, List<int> bytes, String fileName, String mimeType, {bool isReceipt = false}) async {
     final userId = _client.auth.currentUser?.id ?? 'unknown';
     final path = '$userId/$expenseId/$fileName';
-    await _client.storage.from('expense_receipts').uploadBinary(path, bytes as Uint8List, fileOptions: FileOptions(contentType: mimeType));
+    await _client.storage
+        .from('expense_receipts')
+        .uploadBinary(
+          path,
+          Uint8List.fromList(bytes),
+          fileOptions: FileOptions(contentType: mimeType),
+        );
     final url = _client.storage.from('expense_receipts').getPublicUrl(path);
 
     await _client.from('expense_attachments').insert({
@@ -656,12 +737,13 @@ class PayrollRepository {
     final leaveDays = (s['leave_days'] as num?)?.toDouble() ?? 0;
 
     // Get pending advances
+    // Fix #5: .filter('payroll_id', 'is', null) instead of deprecated .isFilter()
     final advances = await _client
         .from('payroll_transactions')
         .select('amount')
         .eq('employee_id', employeeId)
         .eq('transaction_type', 'advance')
-        .isFilter('payroll_id', null);
+        .filter('payroll_id', 'is', null);
 
     double totalAdvance = 0;
     for (final a in advances as List) {
