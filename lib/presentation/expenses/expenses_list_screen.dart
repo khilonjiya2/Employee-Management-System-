@@ -617,8 +617,11 @@ class ExpenseDetailScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: exp.isRejected ? AppColors.error50 : AppColors.success50,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: exp.isRejected ? AppColors.error200 : AppColors.success100),
-      ),
+        border: Border.all(
+  color: exp.isRejected
+      ? AppColors.error100
+      : AppColors.success100,
+),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
