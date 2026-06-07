@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:async';
 
 import '../../data/repositories/auth_repository.dart';
 
@@ -39,9 +40,11 @@ import '../../presentation/notifications/notifications_screen.dart';
 import '../../presentation/shared/main_shell.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  ref.watch(authStateChangesProvider);
+  final authStream =
+      Supabase.instance.client.auth.onAuthStateChange;
 
   return GoRouter(
+    refreshListenable: GoRouterRefreshStream(authStream),
     initialLocation: '/splash',
 
     redirect: (context, state) {
@@ -303,3 +306,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     },
   );
 });
+
+
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+
+    _subscription = stream
+        .asBroadcastStream()
+        .listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
