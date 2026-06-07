@@ -8,7 +8,6 @@ import '../../presentation/startup/splash_screen.dart';
 
 import '../../presentation/auth/login_screen.dart';
 import '../../presentation/auth/forgot_password_screen.dart';
-import '../../presentation/auth/reset_password_screen.dart';
 
 import '../../presentation/dashboard/admin_dashboard_screen.dart';
 import '../../presentation/dashboard/supervisor_dashboard_screen.dart';
@@ -46,29 +45,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
 
     redirect: (context, state) {
-      final session = authRepositoryProvider
-          .read(ref)
-          .currentSession;
+      final session = ref.read(authRepositoryProvider).currentSession;
 
       final isLoggedIn = session != null;
 
       final isPublicRoute = [
-        '/splash',
-        '/login',
-        '/forgot-password',
-        '/reset-password',
-      ].contains(state.matchedLocation);
+  '/splash',
+  '/login',
+  '/forgot-password',
+].contains(state.matchedLocation);
 
       if (!isLoggedIn && !isPublicRoute) {
         return '/login';
       }
 
       if (isLoggedIn &&
-          (state.matchedLocation == '/login' ||
-              state.matchedLocation == '/forgot-password' ||
-              state.matchedLocation == '/reset-password')) {
-        return '/dashboard';
-      }
+    (state.matchedLocation == '/login' ||
+        state.matchedLocation == '/forgot-password')) {
+  return '/dashboard';
+}
 
       return null;
     },
@@ -92,11 +87,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const ForgotPasswordScreen(),
       ),
 
-      GoRoute(
-        name: 'reset-password',
-        path: '/reset-password',
-        builder: (_, __) => const ResetPasswordScreen(),
-      ),
+      
 
       ShellRoute(
         builder: (context, state, child) {
