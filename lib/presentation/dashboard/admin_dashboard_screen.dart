@@ -16,7 +16,6 @@ class AdminDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(dashboardStatsProvider);
     final profile = ref.watch(currentProfileProvider).valueOrNull;
-    final theme = Theme.of(context);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -28,69 +27,144 @@ class AdminDashboardScreen extends ConsumerWidget {
             backgroundColor: AppColors.primary600,
             surfaceTintColor: Colors.transparent,
             flexibleSpace: FlexibleSpaceBar(
+              title: const Text(
+                'Dashboard',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Inter',
+                ),
+              ),
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppColors.primary700, AppColors.primary500],
+                    colors: [
+                      AppColors.primary700,
+                      AppColors.primary500,
+                    ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                 ),
                 child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(
+                      16,
+                      16,
+                      16,
+                      0,
+                    ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
                             CircleAvatar(
                               radius: 20,
-                              backgroundColor: Colors.white.withOpacity(0.2),
-                              child: const Icon(Icons.business_center_rounded, color: Colors.white, size: 20),
+                              backgroundColor:
+                                  Colors.white.withOpacity(
+                                0.2,
+                              ),
+                              child: const Icon(
+                                Icons.business_center_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                 children: [
-                                  Text('Welcome back', style: const TextStyle(color: Color(0xBBFFFFFF), fontSize: 12, fontFamily: 'Inter')),
-                                  Text(profile?.fullName ?? 'Admin', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600, fontFamily: 'Inter')),
+                                  const Text(
+                                    'Welcome back',
+                                    style: TextStyle(
+                                      color:
+                                          Color(0xBBFFFFFF),
+                                      fontSize: 12,
+                                      fontFamily:
+                                          'Inter',
+                                    ),
+                                  ),
+                                  Text(
+                                    profile?.fullName ??
+                                        'Admin',
+                                    maxLines: 1,
+                                    overflow:
+                                        TextOverflow
+                                            .ellipsis,
+                                    style:
+                                        const TextStyle(
+                                      color:
+                                          Colors.white,
+                                      fontSize: 15,
+                                      fontWeight:
+                                          FontWeight
+                                              .w600,
+                                      fontFamily:
+                                          'Inter',
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-                              onPressed: () => context.push('/notifications'),
+                              icon: const Icon(
+                                Icons
+                                    .notifications_outlined,
+                                color: Colors.white,
+                              ),
+                              onPressed: () => context
+                                  .push(
+                                      '/notifications'),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.settings_outlined, color: Colors.white),
-                              onPressed: () => context.push('/settings'),
+                              icon: const Icon(
+                                Icons.settings_outlined,
+                                color: Colors.white,
+                              ),
+                              onPressed: () => context
+                                  .push('/settings'),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          DateFormat('EEEE, dd MMMM yyyy').format(DateTime.now()),
-                          style: const TextStyle(color: Color(0xBBFFFFFF), fontSize: 12, fontFamily: 'Inter'),
+                          DateFormat(
+                            'EEEE, dd MMMM yyyy',
+                          ).format(DateTime.now()),
+                          style: const TextStyle(
+                            color: Color(0xBBFFFFFF),
+                            fontSize: 12,
+                            fontFamily: 'Inter',
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
               ),
-              title: const Text('Dashboard', style: TextStyle(color: Colors.white, fontFamily: 'Inter')),
             ),
-            actions: [
-              IconButton(icon: const Icon(Icons.notifications_outlined, color: Colors.white), onPressed: () => context.push('/notifications')),
-              IconButton(icon: const Icon(Icons.settings_outlined, color: Colors.white), onPressed: () => context.push('/settings')),
-            ],
           ),
           SliverToBoxAdapter(
             child: stats.when(
-              loading: () => const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator())),
-              error: (e, _) => Padding(padding: const EdgeInsets.all(16), child: Text('Error loading stats: $e')),
-              data: (data) => _DashboardBody(stats: data),
+              loading: () => const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(
+                  child:
+                      CircularProgressIndicator(),
+                ),
+              ),
+              error: (e, _) => Padding(
+                padding:
+                    const EdgeInsets.all(16),
+                child: Text(
+                  'Error loading stats: $e',
+                ),
+              ),
+              data: (data) =>
+                  _DashboardBody(stats: data),
             ),
           ),
         ],
