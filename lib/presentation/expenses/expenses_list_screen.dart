@@ -622,6 +622,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
       ? AppColors.error100
       : AppColors.success100,
 ),
+),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
