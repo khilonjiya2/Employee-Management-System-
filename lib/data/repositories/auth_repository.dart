@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:typed_data';
 import '../../core/errors/exceptions.dart' as app_errors;
 
-import '../models/app_models.dart;
+import '../models/app_models.dart';
 
 final supabaseProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
