@@ -190,6 +190,7 @@ class EmployeeRepository {
 
   data['employee_code'] = code;
   data['created_by'] = _client.auth.currentUser?.id;
+  final supervisorId = data.remove('supervisor_id');
 
   final result = await _client
       .from('employees')
@@ -197,13 +198,12 @@ class EmployeeRepository {
       .select('*, departments(name)')
       .single();
 
-  if (data['supervisor_id'] != null) {
-    await _client.from('supervisor_employees').insert({
-      'supervisor_id': data['supervisor_id'],
-      'employee_id': result['id'],
-    });
-  }
-
+  if (supervisorId != null) {
+  await _client.from('supervisor_employees').insert({
+    'supervisor_id': supervisorId,
+    'employee_id': result['id'],
+  });
+}
   await _logAudit(
     'employee_created',
     'employees',
