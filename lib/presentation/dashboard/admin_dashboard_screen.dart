@@ -346,7 +346,7 @@ class SupervisorDashboardScreen extends ConsumerWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: ElevatedButton.icon(
+                      child: OutlinedButton.icon(
                         icon: const Icon(Icons.calendar_today_rounded, size: 18),
                         label: const Text('Mark Attendance'),
                         onPressed: () => context.push('/attendance/new'),
