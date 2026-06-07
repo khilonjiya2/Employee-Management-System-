@@ -370,24 +370,68 @@ class SupervisorDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Future<Map<String, dynamic>> _loadSupervisorStats(WidgetRef ref, String? profileId) async {
-    if (profileId == null) return {};
-    final client = ref.read(supabaseProvider);
-    final sup = await client.from('supervisors').select('id').eq('profile_id', profileId).maybeSingle();
-    if (sup == null) return {'total_employees': 0, 'today_submitted': false, 'pending_expenses': 0, 'total_expenses': 0};
-
-    final supervisorId = sup['id'] as String;
-    final employees = await client.from('supervisor_employees').select('id', const FetchOptions(count: CountOption.exact, head: true)).eq('supervisor_id', supervisorId);
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final todayAtt = await client.from('attendance').select('id').eq('supervisor_id', supervisorId).eq('attendance_date', today).maybeSingle();
-    final pendingExp = await client.from('expenses').select('id', const FetchOptions(count: CountOption.exact, head: true)).eq('supervisor_id', supervisorId).eq('status', 'pending');
-    final totalExp = await client.from('expenses').select('id', const FetchOptions(count: CountOption.exact, head: true)).eq('supervisor_id', supervisorId);
-
+  Future<Map<String, dynamic>> _loadSupervisorStats(
+  WidgetRef ref,
+  String? profileId,
+) async {
+  if (profileId == null) {
     return {
-      'total_employees': employees.count ?? 0,
-      'today_submitted': todayAtt != null,
-      'pending_expenses': pendingExp.count ?? 0,
-      'total_expenses': totalExp.count ?? 0,
+      'total_employees': 0,
+      'today_submitted': false,
+      'pending_expenses': 0,
+      'total_expenses': 0,
     };
   }
+
+  final client = ref.read(supabaseProvider);
+
+  final sup = await client
+      .from('supervisors')
+      .select('id')
+      .eq('profile_id', profileId)
+      .maybeSingle();
+
+  if (sup == null) {
+    return {
+      'total_employees': 0,
+      'today_submitted': false,
+      'pending_expenses': 0,
+      'total_expenses': 0,
+    };
+  }
+
+  final supervisorId = sup['id'] as String;
+
+  final employees = await client
+      .from('supervisor_employees')
+      .select('id')
+      .eq('supervisor_id', supervisorId);
+
+  final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+  final todayAtt = await client
+      .from('attendance')
+      .select('id')
+      .eq('supervisor_id', supervisorId)
+      .eq('attendance_date', today)
+      .maybeSingle();
+
+  final pendingExp = await client
+      .from('expenses')
+      .select('id')
+      .eq('supervisor_id', supervisorId)
+      .eq('status', 'pending');
+
+  final totalExp = await client
+      .from('expenses')
+      .select('id')
+      .eq('supervisor_id', supervisorId);
+
+  return {
+    'total_employees': (employees as List).length,
+    'today_submitted': todayAtt != null,
+    'pending_expenses': (pendingExp as List).length,
+    'total_expenses': (totalExp as List).length,
+  };
+}
 }
