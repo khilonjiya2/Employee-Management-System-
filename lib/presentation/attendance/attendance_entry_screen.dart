@@ -69,16 +69,25 @@ class _AttendanceEntryScreenState extends ConsumerState<AttendanceEntryScreen> {
         return;
       }
 
-      final employees = await ref.read(supervisorRepositoryProvider).getAssignedEmployees(sup['id'] as String);
-      setState(() {
-        _allEmployees = employees.where((e) => e.isActive).toList();
-        _filteredEmployees = List.from(_allEmployees);
-        for (final e in _allEmployees) {
-          _attendance[e.id] = AttendanceStatus.present;
-          _overtime[e.id] = 0;
-        }
-        _isLoadingEmployees = false;
-      });
+      final data = await client
+    .from('employees')
+    .select();
+
+final employees = (data as List)
+    .map((e) => EmployeeModel.fromJson(e))
+    .toList();
+
+setState(() {
+  _allEmployees = employees;
+  _filteredEmployees = List.from(_allEmployees);
+
+  for (final e in _allEmployees) {
+    _attendance[e.id] = AttendanceStatus.present;
+    _overtime[e.id] = 0;
+  }
+
+  _isLoadingEmployees = false;
+});
     } catch (e) {
       setState(() => _isLoadingEmployees = false);
     }
