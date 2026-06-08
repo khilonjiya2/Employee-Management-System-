@@ -324,27 +324,72 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.error500,
-          ),
           child: const Text('Sign Out'),
         ),
       ],
     ),
   );
 
-  if (confirm == true) {
-    try {
-      await ref.read(authRepositoryProvider).signOut();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-          ),
-        );
-      }
-    }
+  if (confirm != true) return;
+
+  try {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        title: Text('Debug'),
+        content: Text('STEP 1 - About to call signOut()'),
+      ),
+    );
+
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (mounted) Navigator.pop(context);
+
+    await ref.read(authRepositoryProvider).signOut();
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        title: Text('Debug'),
+        content: Text('STEP 2 - signOut() completed'),
+      ),
+    );
+
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (mounted) Navigator.pop(context);
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Debug Result'),
+        content: Text(
+          '''
+Current User:
+${ref.read(authRepositoryProvider).currentUser}
+
+Current Session:
+${ref.read(authRepositoryProvider).currentSession}
+''',
+        ),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Logout Error'),
+        content: Text(e.toString()),
+      ),
+    );
   }
 }
 }
