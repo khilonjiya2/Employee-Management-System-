@@ -312,79 +312,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _confirmSignOut(BuildContext context) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error500),
-            child: const Text('Sign Out'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-  try {
-    final auth = ref.read(authRepositoryProvider);
-
-    final beforeSession =
-        auth.currentSession?.accessToken != null;
-
-    await auth.signOut();
-
-    final afterSession =
-        auth.currentSession?.accessToken != null;
-
-    final afterUser =
-        auth.currentUser != null;
-
-    if (mounted) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Logout Debug'),
-          content: Text(
-            '''
-Before Session: $beforeSession
-
-After Session: $afterSession
-
-After User: $afterUser
-''',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Sign Out'),
+      content: const Text('Are you sure you want to sign out?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
         ),
-      );
-    }
-  } catch (e) {
-    if (mounted) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Logout Error'),
-          content: Text(e.toString()),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.error500,
+          ),
+          child: const Text('Sign Out'),
         ),
-      );
+      ],
+    ),
+  );
+
+  if (confirm == true) {
+    try {
+      await ref.read(authRepositoryProvider).signOut();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+          ),
+        );
+      }
     }
   }
 }
-  }
 }
 
 class _SectionTitle extends StatelessWidget {
