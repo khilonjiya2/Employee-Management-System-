@@ -351,15 +351,15 @@ class SupervisorRepository {
     String password,
   ) async {
     final response = await _client.functions.invoke(
-      'create-supervisor',
-      body: {
-        'email': supervisorData['email'],
-        'password': password,
-        'name': supervisorData['name'],
-        'mobile': supervisorData['mobile'],
-      },
-    );
-
+  'create-supervisor',
+  body: {
+    'email': supervisorData['email'],
+    'password': password,
+    'full_name': supervisorData['name'],
+    'mobile': supervisorData['mobile'],
+    'assigned_area': supervisorData['assigned_area'],
+  },
+);
     // Fix #6: safe cast of response.data before key access
     final responseData = response.data as Map<String, dynamic>?;
 
