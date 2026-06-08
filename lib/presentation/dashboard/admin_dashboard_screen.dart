@@ -363,24 +363,14 @@ class _SupervisorDashboardScreenState
   Timer? _refreshTimer;
 
   @override
-  void initState() {
-    super.initState();
-
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) {
-        if (mounted) {
-          setState(() {});
-        }
-      },
-    );
-  }
+void initState() {
+  super.initState();
+}
 
   @override
-  void dispose() {
-    _refreshTimer?.cancel();
-    super.dispose();
-  }
+void dispose() {
+  super.dispose();
+}
 
   Future<void> _refresh() async {
     setState(() {});
