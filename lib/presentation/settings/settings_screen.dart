@@ -157,7 +157,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               icon: const Icon(Icons.logout_rounded, color: AppColors.error500, size: 18),
               label: const Text('Sign Out', style: TextStyle(color: AppColors.error500)),
               style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.error500)),
-              onPressed: () => _confirmSignOut(context),
+              onPressed: () async {
+  await _confirmSignOut(context);
+},
             ),
           ),
           const SizedBox(height: 32),
@@ -312,85 +314,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _confirmSignOut(BuildContext context) async {
-  final confirm = await showDialog<bool>(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text('Sign Out'),
-      content: const Text('Are you sure you want to sign out?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Sign Out'),
-        ),
-      ],
-    ),
-  );
+  await ref.read(authRepositoryProvider).signOut();
 
-  if (confirm != true) return;
+  if (!mounted) return;
 
-  try {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const AlertDialog(
-        title: Text('Debug'),
-        content: Text('STEP 1 - About to call signOut()'),
-      ),
-    );
-
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (mounted) Navigator.pop(context);
-
-    await ref.read(authRepositoryProvider).signOut();
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const AlertDialog(
-        title: Text('Debug'),
-        content: Text('STEP 2 - signOut() completed'),
-      ),
-    );
-
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (mounted) Navigator.pop(context);
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Debug Result'),
-        content: Text(
-          '''
-Current User:
-${ref.read(authRepositoryProvider).currentUser}
-
-Current Session:
-${ref.read(authRepositoryProvider).currentSession}
-''',
-        ),
-      ),
-    );
-  } catch (e) {
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Logout Error'),
-        content: Text(e.toString()),
-      ),
-    );
-  }
+  context.go('/login');
 }
 }
 
