@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart';
@@ -314,11 +315,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _confirmSignOut(BuildContext context) async {
-  await ref.read(authRepositoryProvider).signOut();
+  try {
+    await Supabase.instance.client.auth.signOut();
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  context.go('/login');
+    Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
+
+    context.go('/login');
+  } catch (e) {
+    debugPrint('LOGOUT ERROR: $e');
+  }
 }
 }
 
