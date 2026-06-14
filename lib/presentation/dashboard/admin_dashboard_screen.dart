@@ -414,55 +414,70 @@ void dispose() {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [
-                          AppColors.primary600,
-                          AppColors.primary400,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        const CircleAvatar(
-                          radius: 24,
-                          backgroundColor: Colors.white24,
-                          child: Icon(
-                            Icons.person_rounded,
-                            color: Colors.white,
-                            size: 28,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Welcome, ${profile?.fullName ?? 'Supervisor'}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontFamily: 'Inter',
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              DateFormat('EEEE, dd MMM')
-                                  .format(DateTime.now()),
-                              style: const TextStyle(
-                                color: Color(0xCCFFFFFF),
-                                fontFamily: 'Inter',
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+  padding: const EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    gradient: const LinearGradient(
+      colors: [
+        AppColors.primary600,
+        AppColors.primary400,
+      ],
+    ),
+    borderRadius: BorderRadius.circular(16),
+  ),
+  child: Row(
+    children: [
+      CircleAvatar(
+        radius: 32,
+        backgroundColor: Colors.white24,
+        backgroundImage: profile?.profilePhotoUrl != null
+            ? NetworkImage(profile!.profilePhotoUrl!)
+            : null,
+        child: profile?.profilePhotoUrl == null
+            ? Text(
+                (profile?.fullName.isNotEmpty ?? false)
+                    ? profile!.fullName[0].toUpperCase()
+                    : 'S',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
+            : null,
+      ),
+      const SizedBox(width: 14),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              profile?.fullName ?? 'Supervisor',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'Inter',
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              DateFormat(
+                'EEEE, dd MMMM yyyy',
+              ).format(DateTime.now()),
+              style: const TextStyle(
+                color: Color(0xCCFFFFFF),
+                fontFamily: 'Inter',
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  ),
+),
 
                   const SizedBox(height: 20),
 
