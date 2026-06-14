@@ -28,8 +28,7 @@ class AdminDashboardScreen extends ConsumerWidget {
             backgroundColor: AppColors.primary600,
             surfaceTintColor: Colors.transparent,
             flexibleSpace: FlexibleSpaceBar(
-              title: const Text(
-                'Dashboard',
+              title: null,
                 style: TextStyle(
                   color: Colors.white,
                   fontFamily: 'Inter',
@@ -79,7 +78,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                                     CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'Welcome back',
+                                    'Welcome Admin',
                                     style: TextStyle(
                                       color:
                                           Color(0xBBFFFFFF),
@@ -186,8 +185,22 @@ class _DashboardBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const w.SectionHeader(title: 'Today\'s Overview'),
+          const w.SectionHeader(
+            title: 'Admin Actions',
+          ),
+
           const SizedBox(height: 12),
+
+          _QuickActions(),
+
+          const SizedBox(height: 24),
+
+          const w.SectionHeader(
+            title: 'Today\'s Overview',
+          ),
+
+          const SizedBox(height: 12),
+
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -222,29 +235,49 @@ class _DashboardBody extends StatelessWidget {
               ),
             ],
           ),
+
           const SizedBox(height: 24),
-          const w.SectionHeader(title: 'Expense Overview'),
+
+          const w.SectionHeader(
+            title: 'Today\'s Expense Overview',
+          ),
+
           const SizedBox(height: 12),
+
           Row(
             children: [
-              Expanded(child: w.StatCard(
-                title: 'Pending',
-                value: CurrencyUtils.formatCompact(stats['expense_pending'] ?? 0),
-                icon: Icons.pending_outlined,
-                color: AppColors.accent500,
-              )),
+              Expanded(
+                child: w.StatCard(
+                  title: 'Pending',
+                  value: CurrencyUtils.formatCompact(
+                    stats['expense_pending'] ?? 0,
+                  ),
+                  icon: Icons.pending_outlined,
+                  color: AppColors.accent500,
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: w.StatCard(
-                title: 'Approved',
-                value: CurrencyUtils.formatCompact(stats['expense_approved'] ?? 0),
-                icon: Icons.check_circle_outline,
-                color: AppColors.success500,
-              )),
+              Expanded(
+                child: w.StatCard(
+                  title: 'Approved',
+                  value: CurrencyUtils.formatCompact(
+                    stats['expense_approved'] ?? 0,
+                  ),
+                  icon: Icons.check_circle_outline,
+                  color: AppColors.success500,
+                ),
+              ),
             ],
           ),
+
           const SizedBox(height: 24),
-          const w.SectionHeader(title: 'Payroll Overview'),
+
+          const w.SectionHeader(
+            title: 'Payroll Overview',
+          ),
+
           const SizedBox(height: 12),
+
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -255,26 +288,31 @@ class _DashboardBody extends StatelessWidget {
             children: [
               w.StatCard(
                 title: 'Liability',
-                value: CurrencyUtils.formatCompact(stats['payroll_liability'] ?? 0),
+                value: CurrencyUtils.formatCompact(
+                  stats['payroll_liability'] ?? 0,
+                ),
                 icon: Icons.account_balance_outlined,
                 color: AppColors.primary500,
               ),
               w.StatCard(
                 title: 'Paid',
-                value: CurrencyUtils.formatCompact(stats['payroll_paid'] ?? 0),
+                value: CurrencyUtils.formatCompact(
+                  stats['payroll_paid'] ?? 0,
+                ),
                 icon: Icons.payments_outlined,
                 color: AppColors.success500,
               ),
               w.StatCard(
                 title: 'Pending',
-                value: CurrencyUtils.formatCompact(stats['payroll_pending'] ?? 0),
+                value: CurrencyUtils.formatCompact(
+                  stats['payroll_pending'] ?? 0,
+                ),
                 icon: Icons.hourglass_bottom_rounded,
                 color: AppColors.accent500,
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          _QuickActions(),
+
           const SizedBox(height: 32),
         ],
       ),
@@ -286,31 +324,58 @@ class _QuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const w.SectionHeader(title: 'Quick Actions'),
-        const SizedBox(height: 12),
         Row(
           children: [
-            _QuickActionBtn(icon: Icons.people_rounded, label: 'Employees', onTap: () => context.push('/employees')),
+            _QuickActionBtn(
+              icon: Icons.people_rounded,
+              label: 'Employees',
+              onTap: () => context.push('/employees'),
+            ),
             const SizedBox(width: 8),
-            _QuickActionBtn(icon: Icons.supervisor_account_rounded, label: 'Supervisors', onTap: () => context.push('/supervisors')),
+            _QuickActionBtn(
+              icon: Icons.supervisor_account_rounded,
+              label: 'Supervisors',
+              onTap: () => context.push('/supervisors'),
+            ),
             const SizedBox(width: 8),
-            _QuickActionBtn(icon: Icons.calendar_today_rounded, label: 'Attendance', onTap: () => context.push('/attendance')),
+            _QuickActionBtn(
+              icon: Icons.calendar_today_rounded,
+              label: 'Attendance',
+              onTap: () => context.push('/attendance'),
+            ),
             const SizedBox(width: 8),
-            _QuickActionBtn(icon: Icons.receipt_long_rounded, label: 'Expenses', onTap: () => context.push('/expenses')),
+            _QuickActionBtn(
+              icon: Icons.receipt_long_rounded,
+              label: 'Expenses',
+              onTap: () => context.push('/expenses'),
+            ),
           ],
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            _QuickActionBtn(icon: Icons.payments_rounded, label: 'Payroll', onTap: () => context.push('/payroll')),
+            _QuickActionBtn(
+              icon: Icons.payments_rounded,
+              label: 'Payroll',
+              onTap: () => context.push('/payroll'),
+            ),
             const SizedBox(width: 8),
-            _QuickActionBtn(icon: Icons.bar_chart_rounded, label: 'Reports', onTap: () => context.push('/reports')),
+            _QuickActionBtn(
+              icon: Icons.bar_chart_rounded,
+              label: 'Reports',
+              onTap: () => context.push('/reports'),
+            ),
             const SizedBox(width: 8),
-            _QuickActionBtn(icon: Icons.settings_rounded, label: 'Settings', onTap: () => context.push('/settings')),
+            _QuickActionBtn(
+              icon: Icons.settings_rounded,
+              label: 'Settings',
+              onTap: () => context.push('/settings'),
+            ),
             const SizedBox(width: 8),
-            const Expanded(child: SizedBox()),
+            const Expanded(
+              child: SizedBox(),
+            ),
           ],
         ),
       ],
