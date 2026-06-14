@@ -886,26 +886,15 @@ class PayrollRepository {
 
 // Dashboard stats provider
 final dashboardStatsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
-  final client = ref.watch(supabaseProvider);
+  final client = ref.read(supabaseProvider);
   final now = DateTime.now();
 
-  // Employee counts
-  final totalEmp =
-      await client.from('employees').select('id');
+  final totalEmp = await client.from('employees').select('id');
+  final activeEmp = await client.from('employees').select('id').eq('status', 'active');
 
-  final activeEmp =
-      await client.from('employees')
-          .select('id')
-          .eq('status', 'active');
-
-  // Today attendance
-  final todayAttendance = await ref.watch(attendanceRepositoryProvider).getTodaySummary();
-
-  // Expense summary
-  final expenseSummary = await ref.watch(expenseRepositoryProvider).getSummary();
-
-  // Payroll summary
-  final payrollSummary = await ref.watch(payrollRepositoryProvider).getMonthlySummary(now.month, now.year);
+  final todayAttendance = await ref.read(attendanceRepositoryProvider).getTodaySummary();
+  final expenseSummary = await ref.read(expenseRepositoryProvider).getSummary();
+  final payrollSummary = await ref.read(payrollRepositoryProvider).getMonthlySummary(now.month, now.year);
 
   return {
     'total_employees': (totalEmp as List).length,
