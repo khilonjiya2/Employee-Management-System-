@@ -16,7 +16,7 @@ final authStateChangesProvider = StreamProvider<AuthState>((ref) {
 
 // Current user profile
 final currentProfileProvider =
-    FutureProvider.autoDispose<ProfileModel?>((ref) async {
+    FutureProvider<ProfileModel?>((ref) async {
   final client = ref.watch(supabaseProvider);
   final user = client.auth.currentUser;
   if (user == null) return null;
@@ -25,6 +25,8 @@ final currentProfileProvider =
   if (data == null) return null;
   return ProfileModel.fromJson(data);
 });
+
+  
 
 final currentUserRoleProvider = Provider<String>((ref) {
   final profile = ref.watch(currentProfileProvider);
