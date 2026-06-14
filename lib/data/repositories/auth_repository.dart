@@ -524,23 +524,40 @@ class AttendanceRepository {
   }
 
   Future<AttendanceModel> updateDetails(
-    String attendanceId,
-    Map<String, dynamic> attendanceData,
-    List<Map<String, dynamic>> detailsData,
-  ) async {
-    await _client.from('attendance').update(attendanceData).eq('id', attendanceId);
+  String attendanceId,
+  Map<String, dynamic> attendanceData,
+  List<Map<String, dynamic>> detailsData,
+) async {
+  await _client
+      .from('attendance')
+      .update({
+        ...attendanceData,
+        'is_approved': false,
+        'approved_by': null,
+        'approved_at': null,
+      })
+      .eq('id', attendanceId);
 
-    for (final detail in detailsData) {
-      await _client.from('attendance_details').upsert(
-        {...detail, 'attendance_id': attendanceId},
-        onConflict: 'attendance_id, employee_id',
-      );
-    }
-
-    final full = await getById(attendanceId);
-    await _logAudit('attendance_updated', 'attendance', attendanceId);
-    return full!;
+  for (final detail in detailsData) {
+    await _client.from('attendance_details').upsert(
+      {
+        ...detail,
+        'attendance_id': attendanceId,
+      },
+      onConflict: 'attendance_id, employee_id',
+    );
   }
+
+  final full = await getById(attendanceId);
+
+  await _logAudit(
+    'attendance_updated',
+    'attendance',
+    attendanceId,
+  );
+
+  return full!;
+}
 
   Future<void> approve(String attendanceId, String adminId) async {
     await _client.from('attendance').update({
