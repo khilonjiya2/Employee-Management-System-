@@ -27,8 +27,9 @@ class _AttendanceEntryScreenState extends ConsumerState<AttendanceEntryScreen> {
   final _workSiteController = TextEditingController();
   final _searchController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
- String? _selectedLocation;
-
+ List<LocationModel> _locations = [];
+String? _selectedLocationId;
+String? _selectedLocation;
   DateTime _selectedDate = DateTime.now();
   List<EmployeeModel> _allEmployees = [];
   List<EmployeeModel> _filteredEmployees = [];
@@ -74,38 +75,44 @@ void dispose() {
       return;
     }
 
-    final supervisorId = sup['id'];
+    final supervisorId = sup['id'].toString();
 
     final links = await client
         .from('supervisor_employees')
         .select('employee_id')
         .eq('supervisor_id', supervisorId);
 
-    if ((links as List).isEmpty) {
-      setState(() {
-        _allEmployees = [];
-        _filteredEmployees = [];
-        _isLoadingEmployees = false;
-      });
-      return;
+    final employeeIds = (links as List)
+    .map<String>((e) => e['employee_id'].toString())
+    .toList();
+    List<EmployeeModel> employees = [];
+
+    if (employeeIds.isNotEmpty) {
+      final employeeData = await client
+          .from('employees')
+          .select('*, departments(name)')
+          .inFilter('id', employeeIds);
+
+      employees = (employeeData as List)
+          .map((e) => EmployeeModel.fromJson(e))
+          .toList();
     }
 
-    final employeeIds = links
-        .map((e) => e['employee_id'] as String)
-        .toList();
-
-    final data = await client
-        .from('employees')
+    final locationData = await client
+        .from('locations')
         .select()
-        .inFilter('id', employeeIds);
+        .eq('is_active', true)
+        .order('name');
 
-    final employees = (data as List)
-        .map((e) => EmployeeModel.fromJson(e))
+    final locations = (locationData as List)
+        .map((e) => LocationModel.fromJson(e))
         .toList();
 
     setState(() {
       _allEmployees = employees;
       _filteredEmployees = List.from(employees);
+
+      _locations = locations;
 
       _attendance.clear();
 
@@ -116,11 +123,11 @@ void dispose() {
       _isLoadingEmployees = false;
     });
   } catch (e) {
+    debugPrint('Load employees error: $e');
+
     setState(() {
       _isLoadingEmployees = false;
     });
-
-    debugPrint('Load employees error: $e');
   }
 }
 
@@ -188,20 +195,26 @@ void dispose() {
       final profile = ref.read(currentProfileProvider).valueOrNull;
 
       final sup = await client.from('supervisors').select('id').eq('profile_id', profile!.id).maybeSingle();
-      final supervisorId = sup?['id'] as String?;
+      final supervisorId = sup?['id']?.toString();
       if (supervisorId == null) throw Exception('Supervisor not found');
 
       final attendanceData = {
-        'supervisor_id': supervisorId,
-        'attendance_date': DateFormat('yyyy-MM-dd').format(_selectedDate),
-        'location_name': _selectedLocation,
-        'work_site_name': _workSiteController.text.trim(),
-        'work_description': null,
-        'remarks': null,
-        'submitted_latitude': _currentPosition?.latitude,
-        'submitted_longitude': _currentPosition?.longitude,
-        'submitted_address': _currentAddress,
-      };
+  'supervisor_id': supervisorId,
+  'location_id': _selectedLocationId,
+  'location_name': _selectedLocation,
+  'attendance_date':
+      DateFormat('yyyy-MM-dd').format(_selectedDate),
+  'work_site_name':
+      _workSiteController.text.trim(),
+  'work_description': null,
+  'remarks': null,
+  'submitted_latitude':
+      _currentPosition?.latitude,
+  'submitted_longitude':
+      _currentPosition?.longitude,
+  'submitted_address':
+      _currentAddress,
+};
 
       final detailsData = _allEmployees.map((e) => {
   'employee_id': e.id,
@@ -343,30 +356,27 @@ Widget build(BuildContext context) {
                   const SizedBox(height: 12),
 
                   DropdownButtonFormField<String>(
-  value: _selectedLocation,
+  value: _selectedLocationId,
   decoration: const InputDecoration(
     labelText: 'Location Name *',
-    prefixIcon: Icon(
-      Icons.location_city_outlined,
-    ),
+    prefixIcon: Icon(Icons.location_city_outlined),
   ),
-  items: const [
-    DropdownMenuItem(
-      value: 'Location 1',
-      child: Text('Location 1'),
-    ),
-    DropdownMenuItem(
-      value: 'Location 2',
-      child: Text('Location 2'),
-    ),
-    DropdownMenuItem(
-      value: 'Location 3',
-      child: Text('Location 3'),
-    ),
-  ],
+  items: _locations
+      .map(
+        (location) => DropdownMenuItem<String>(
+          value: location.id,
+          child: Text(location.name),
+        ),
+      )
+      .toList(),
   onChanged: (value) {
+    final selected = _locations.firstWhere(
+      (e) => e.id == value,
+    );
+
     setState(() {
-      _selectedLocation = value;
+      _selectedLocationId = selected.id;
+      _selectedLocation = selected.name;
     });
   },
   validator: (value) {
@@ -376,7 +386,6 @@ Widget build(BuildContext context) {
     return null;
   },
 ),
-
                   const SizedBox(height: 12),
 
                   TextFormField(
