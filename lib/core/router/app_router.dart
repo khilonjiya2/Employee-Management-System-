@@ -41,8 +41,7 @@ import '../../presentation/notifications/notifications_screen.dart';
 import '../../presentation/shared/main_shell.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authStream =
-      Supabase.instance.client.auth.onAuthStateChange;
+  final authStream = Supabase.instance.client.auth.onAuthStateChange;
 
   return GoRouter(
     refreshListenable: GoRouterRefreshStream(authStream),
@@ -50,25 +49,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
     redirect: (context, state) {
       final session = ref.read(authRepositoryProvider).currentSession;
-
       final isLoggedIn = session != null;
 
+      if (state.matchedLocation == '/splash') return null;
+
       final isPublicRoute = [
-  '/splash',
-  '/login',
-  '/forgot-password',
-].contains(state.matchedLocation);
+        '/login',
+        '/forgot-password',
+      ].contains(state.matchedLocation);
 
-      if (!isLoggedIn && !isPublicRoute) {
-        return '/login';
-      }
-
-      if (isLoggedIn &&
-    (state.matchedLocation == '/login' ||
-        state.matchedLocation == '/forgot-password' ||
-        state.matchedLocation == '/splash')) {
-  return '/dashboard';
-}
+      if (!isLoggedIn && !isPublicRoute) return '/login';
+      if (isLoggedIn && isPublicRoute) return '/dashboard';
 
       return null;
     },
@@ -79,20 +70,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/splash',
         builder: (_, __) => const SplashScreen(),
       ),
-
       GoRoute(
         name: 'login',
         path: '/login',
         builder: (_, __) => const LoginScreen(),
       ),
-
       GoRoute(
         name: 'forgot-password',
         path: '/forgot-password',
         builder: (_, __) => const ForgotPasswordScreen(),
       ),
-
-      
 
       ShellRoute(
         builder: (context, state, child) {
@@ -102,58 +89,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             name: 'dashboard',
             path: '/dashboard',
-            builder: (context, state) {
-              final profile =
-    ref.watch(currentProfileProvider);
-              return profile.when(
-                loading: () => const Scaffold(
-                  body: Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                ),
-                error: (_, __) => const Scaffold(
-                  body: Center(
-                    child: Text('Failed to load profile'),
-                  ),
-                ),
-                data: (profile) {
-                  if (profile?.role == 'admin') {
-                    return const AdminDashboardScreen();
-                  }
-
-                  return const SupervisorDashboardScreen();
-                },
-              );
-            },
+            builder: (context, state) => const DashboardRouterWidget(),
           ),
 
           GoRoute(
             name: 'employees',
             path: '/employees',
-            builder: (_, __) =>
-                const EmployeesListScreen(),
+            builder: (_, __) => const EmployeesListScreen(),
             routes: [
               GoRoute(
                 name: 'employee-new',
                 path: 'new',
-                builder: (_, __) =>
-                    const EmployeeFormScreen(),
+                builder: (_, __) => const EmployeeFormScreen(),
               ),
               GoRoute(
                 name: 'employee-detail',
                 path: ':id',
-                builder: (_, state) =>
-                    EmployeeDetailScreen(
+                builder: (_, state) => EmployeeDetailScreen(
                   id: state.pathParameters['id']!,
                 ),
               ),
               GoRoute(
                 name: 'employee-edit',
                 path: ':id/edit',
-                builder: (_, state) =>
-                    EmployeeFormScreen(
-                  employeeId:
-                      state.pathParameters['id']!,
+                builder: (_, state) => EmployeeFormScreen(
+                  employeeId: state.pathParameters['id']!,
                 ),
               ),
             ],
@@ -162,30 +122,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             name: 'supervisors',
             path: '/supervisors',
-            builder: (_, __) =>
-                const SupervisorsListScreen(),
+            builder: (_, __) => const SupervisorsListScreen(),
             routes: [
               GoRoute(
                 name: 'supervisor-new',
                 path: 'new',
-                builder: (_, __) =>
-                    const SupervisorFormScreen(),
+                builder: (_, __) => const SupervisorFormScreen(),
               ),
               GoRoute(
                 name: 'supervisor-detail',
                 path: ':id',
-                builder: (_, state) =>
-                    SupervisorDetailScreen(
+                builder: (_, state) => SupervisorDetailScreen(
                   id: state.pathParameters['id']!,
                 ),
               ),
               GoRoute(
                 name: 'supervisor-edit',
                 path: ':id/edit',
-                builder: (_, state) =>
-                    SupervisorFormScreen(
-                  supervisorId:
-                      state.pathParameters['id']!,
+                builder: (_, state) => SupervisorFormScreen(
+                  supervisorId: state.pathParameters['id']!,
                 ),
               ),
             ],
@@ -194,22 +149,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             name: 'attendance',
             path: '/attendance',
-            builder: (_, __) =>
-                const AttendanceListScreen(),
+            builder: (_, __) => const AttendanceListScreen(),
             routes: [
               GoRoute(
                 name: 'attendance-new',
                 path: 'new',
-                builder: (_, __) =>
-                    const AttendanceEntryScreen(),
+                builder: (_, __) => const AttendanceEntryScreen(),
               ),
               GoRoute(
                 name: 'attendance-map',
                 path: ':id/map',
-                builder: (_, state) =>
-                    AttendanceMapScreen(
-                  attendanceId:
-                      state.pathParameters['id']!,
+                builder: (_, state) => AttendanceMapScreen(
+                  attendanceId: state.pathParameters['id']!,
                 ),
               ),
             ],
@@ -218,30 +169,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             name: 'expenses',
             path: '/expenses',
-            builder: (_, __) =>
-                const ExpensesListScreen(),
+            builder: (_, __) => const ExpensesListScreen(),
             routes: [
               GoRoute(
                 name: 'expense-new',
                 path: 'new',
-                builder: (_, __) =>
-                    const ExpenseFormScreen(),
+                builder: (_, __) => const ExpenseFormScreen(),
               ),
               GoRoute(
                 name: 'expense-detail',
                 path: ':id',
-                builder: (_, state) =>
-                    ExpenseDetailScreen(
+                builder: (_, state) => ExpenseDetailScreen(
                   id: state.pathParameters['id']!,
                 ),
               ),
               GoRoute(
                 name: 'expense-edit',
                 path: ':id/edit',
-                builder: (_, state) =>
-                    ExpenseFormScreen(
-                  expenseId:
-                      state.pathParameters['id']!,
+                builder: (_, state) => ExpenseFormScreen(
+                  expenseId: state.pathParameters['id']!,
                 ),
               ),
             ],
@@ -250,20 +196,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             name: 'payroll',
             path: '/payroll',
-            builder: (_, __) =>
-                const PayrollListScreen(),
+            builder: (_, __) => const PayrollListScreen(),
             routes: [
               GoRoute(
                 name: 'payroll-process',
                 path: 'process',
-                builder: (_, __) =>
-                    const PayrollProcessScreen(),
+                builder: (_, __) => const PayrollProcessScreen(),
               ),
               GoRoute(
                 name: 'payroll-detail',
                 path: ':id',
-                builder: (_, state) =>
-                    PayrollDetailScreen(
+                builder: (_, state) => PayrollDetailScreen(
                   id: state.pathParameters['id']!,
                 ),
               ),
@@ -285,8 +228,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             name: 'notifications',
             path: '/notifications',
-            builder: (_, __) =>
-                const NotificationsScreen(),
+            builder: (_, __) => const NotificationsScreen(),
           ),
         ],
       ),
@@ -299,8 +241,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
         body: Center(
           child: Text(
-            state.error?.toString() ??
-                'Unknown routing error',
+            state.error?.toString() ?? 'Unknown routing error',
           ),
         ),
       );
@@ -308,11 +249,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
+class DashboardRouterWidget extends ConsumerWidget {
+  const DashboardRouterWidget({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(currentProfileProvider);
+
+    return profile.when(
+      loading: () => const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      ),
+      error: (e, _) => Scaffold(
+        body: Center(
+          child: Text('Failed to load profile: $e'),
+        ),
+      ),
+      data: (profile) {
+        if (profile?.role == 'admin') {
+          return const AdminDashboardScreen();
+        }
+        return const SupervisorDashboardScreen();
+      },
+    );
+  }
+}
 
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<dynamic> stream) {
     notifyListeners();
-
     _subscription = stream
         .asBroadcastStream()
         .listen((_) => notifyListeners());
