@@ -11,7 +11,10 @@ import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../shared/widgets.dart' as w;
 
-enum AttendanceStatus { present, absent, halfDay, leave }
+enum AttendanceStatus {
+  present,
+  absent,
+}
 
 class AttendanceEntryScreen extends ConsumerStatefulWidget {
   const AttendanceEntryScreen({super.key});
@@ -21,19 +24,15 @@ class AttendanceEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _AttendanceEntryScreenState extends ConsumerState<AttendanceEntryScreen> {
-  final _locationNameController = TextEditingController();
   final _workSiteController = TextEditingController();
-  final _workDescController = TextEditingController();
-  final _remarksController = TextEditingController();
   final _searchController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+ String? _selectedLocation;
 
   DateTime _selectedDate = DateTime.now();
   List<EmployeeModel> _allEmployees = [];
   List<EmployeeModel> _filteredEmployees = [];
   Map<String, AttendanceStatus> _attendance = {};
-  Map<String, double> _overtime = {};
-  Map<String, String> _employeeRemarks = {};
   bool _isLoading = false;
   bool _isLoadingEmployees = true;
   Position? _currentPosition;
@@ -48,50 +47,82 @@ class _AttendanceEntryScreenState extends ConsumerState<AttendanceEntryScreen> {
   }
 
   @override
-  void dispose() {
-    _locationNameController.dispose();
-    _workSiteController.dispose();
-    _workDescController.dispose();
-    _remarksController.dispose();
-    _searchController.dispose();
-    super.dispose();
-  }
+void dispose() {
+  _workSiteController.dispose();
+  _searchController.dispose();
+  super.dispose();
+}
 
   Future<void> _loadEmployees() async {
-    try {
-      final client = ref.read(supabaseProvider);
-      final profile = ref.read(currentProfileProvider).valueOrNull;
-      if (profile == null) return;
+  try {
+    final client = ref.read(supabaseProvider);
+    final profile = ref.read(currentProfileProvider).valueOrNull;
 
-      final sup = await client.from('supervisors').select('id').eq('profile_id', profile.id).maybeSingle();
-      if (sup == null) {
-        setState(() => _isLoadingEmployees = false);
-        return;
+    if (profile == null) {
+      setState(() => _isLoadingEmployees = false);
+      return;
+    }
+
+    final sup = await client
+        .from('supervisors')
+        .select('id')
+        .eq('profile_id', profile.id)
+        .maybeSingle();
+
+    if (sup == null) {
+      setState(() => _isLoadingEmployees = false);
+      return;
+    }
+
+    final supervisorId = sup['id'];
+
+    final links = await client
+        .from('supervisor_employees')
+        .select('employee_id')
+        .eq('supervisor_id', supervisorId);
+
+    if ((links as List).isEmpty) {
+      setState(() {
+        _allEmployees = [];
+        _filteredEmployees = [];
+        _isLoadingEmployees = false;
+      });
+      return;
+    }
+
+    final employeeIds = links
+        .map((e) => e['employee_id'] as String)
+        .toList();
+
+    final data = await client
+        .from('employees')
+        .select()
+        .inFilter('id', employeeIds);
+
+    final employees = (data as List)
+        .map((e) => EmployeeModel.fromJson(e))
+        .toList();
+
+    setState(() {
+      _allEmployees = employees;
+      _filteredEmployees = List.from(employees);
+
+      _attendance.clear();
+
+      for (final employee in employees) {
+        _attendance[employee.id] = AttendanceStatus.present;
       }
 
-      final data = await client
-    .from('employees')
-    .select();
+      _isLoadingEmployees = false;
+    });
+  } catch (e) {
+    setState(() {
+      _isLoadingEmployees = false;
+    });
 
-final employees = (data as List)
-    .map((e) => EmployeeModel.fromJson(e))
-    .toList();
-
-setState(() {
-  _allEmployees = employees;
-  _filteredEmployees = List.from(_allEmployees);
-
-  for (final e in _allEmployees) {
-    _attendance[e.id] = AttendanceStatus.present;
-    _overtime[e.id] = 0;
+    debugPrint('Load employees error: $e');
   }
-
-  _isLoadingEmployees = false;
-});
-    } catch (e) {
-      setState(() => _isLoadingEmployees = false);
-    }
-  }
+}
 
   Future<void> _captureLocation() async {
     setState(() => _isCapturingLocation = true);
@@ -122,14 +153,16 @@ setState(() {
   }
 
   void _filterEmployees(String query) {
-    setState(() {
-      _filteredEmployees = query.isEmpty
-          ? List.from(_allEmployees)
-          : _allEmployees.where((e) =>
-              e.name.toLowerCase().contains(query.toLowerCase()) ||
-              e.employeeCode.toLowerCase().contains(query.toLowerCase())).toList();
-    });
-  }
+  setState(() {
+    _filteredEmployees = query.isEmpty
+        ? List.from(_allEmployees)
+        : _allEmployees.where(
+            (e) => e.name
+                .toLowerCase()
+                .contains(query.toLowerCase()),
+          ).toList();
+  });
+}
 
   void _bulkMarkAll(AttendanceStatus status) {
     setState(() {
@@ -161,21 +194,21 @@ setState(() {
       final attendanceData = {
         'supervisor_id': supervisorId,
         'attendance_date': DateFormat('yyyy-MM-dd').format(_selectedDate),
-        'location_name': _locationNameController.text.trim(),
+        'location_name': _selectedLocation,
         'work_site_name': _workSiteController.text.trim(),
-        'work_description': _workDescController.text.trim(),
-        'remarks': _remarksController.text.trim(),
+        'work_description': null,
+        'remarks': null,
         'submitted_latitude': _currentPosition?.latitude,
         'submitted_longitude': _currentPosition?.longitude,
         'submitted_address': _currentAddress,
       };
 
       final detailsData = _allEmployees.map((e) => {
-        'employee_id': e.id,
-        'status': _statusToString(_attendance[e.id] ?? AttendanceStatus.absent),
-        'overtime_hours': _overtime[e.id] ?? 0,
-        'remarks': _employeeRemarks[e.id],
-      }).toList();
+  'employee_id': e.id,
+  'status': _statusToString(
+    _attendance[e.id] ?? AttendanceStatus.present,
+  ),
+}).toList();
 
       await ref.read(attendanceRepositoryProvider).createWithDetails(attendanceData, detailsData);
 
@@ -197,159 +230,306 @@ setState(() {
   }
 
   String _statusToString(AttendanceStatus s) {
-    switch (s) {
-      case AttendanceStatus.present: return 'present';
-      case AttendanceStatus.absent: return 'absent';
-      case AttendanceStatus.halfDay: return 'half_day';
-      case AttendanceStatus.leave: return 'leave';
-    }
+  switch (s) {
+    case AttendanceStatus.present:
+      return 'present';
+    case AttendanceStatus.absent:
+      return 'absent';
   }
-
+}
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final presentCount = _attendance.values.where((s) => s == AttendanceStatus.present).length;
-    final absentCount = _attendance.values.where((s) => s == AttendanceStatus.absent).length;
+Widget build(BuildContext context) {
+  final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mark Attendance'),
-        actions: [
-          TextButton(onPressed: _isLoading ? null : _submit, child: const Text('Submit')),
-        ],
+  final presentCount = _attendance.values
+      .where((s) => s == AttendanceStatus.present)
+      .length;
+
+  final absentCount = _attendance.values
+      .where((s) => s == AttendanceStatus.absent)
+      .length;
+
+  return Scaffold(
+    appBar: AppBar(
+      title: const Text('Mark Attendance'),
+    ),
+
+    bottomNavigationBar: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: SizedBox(
+          height: 52,
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _submit,
+            child: const Text('Submit Attendance'),
+          ),
+        ),
       ),
-      body: w.LoadingOverlay(
-        isLoading: _isLoading,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              // Location header
-              if (_currentAddress != null || _isCapturingLocation)
-                Container(
-                  color: AppColors.primary50,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: Row(
-                    children: [
-                      _isCapturingLocation
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.location_on_rounded, color: AppColors.primary600, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _isCapturingLocation ? 'Capturing location...' : _currentAddress ?? '',
-                          style: theme.textTheme.bodySmall?.copyWith(color: AppColors.primary700),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              // Form fields
-              SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      // Date picker
-                      InkWell(
-                        onTap: _pickDate,
-                        child: InputDecorator(
-                          decoration: const InputDecoration(labelText: 'Date *', prefixIcon: Icon(Icons.calendar_today_outlined)),
-                          child: Text(DateFormat('dd MMMM yyyy').format(_selectedDate)),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _locationNameController,
-                        decoration: const InputDecoration(labelText: 'Location Name *', prefixIcon: Icon(Icons.location_city_outlined)),
-                        validator: (v) => ValidationUtils.validateRequired(v, 'Location'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _workSiteController,
-                        decoration: const InputDecoration(labelText: 'Work Site', prefixIcon: Icon(Icons.construction_outlined)),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _workDescController,
-                        maxLines: 2,
-                        decoration: const InputDecoration(labelText: 'Work Description', prefixIcon: Icon(Icons.description_outlined)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              // Summary bar
+    ),
+
+    body: w.LoadingOverlay(
+      isLoading: _isLoading,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            if (_currentAddress != null ||
+                _isCapturingLocation)
               Container(
-                color: theme.colorScheme.surface,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                color: AppColors.primary50,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
-                    _SummaryChip(label: 'P', count: presentCount, color: AppColors.success500),
+                    _isCapturingLocation
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child:
+                                CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.location_on_rounded,
+                            color: AppColors.primary600,
+                            size: 16,
+                          ),
                     const SizedBox(width: 8),
-                    _SummaryChip(label: 'A', count: absentCount, color: AppColors.error500),
-                    const SizedBox(width: 8),
-                    _SummaryChip(
-                      label: 'H',
-                      count: _attendance.values.where((s) => s == AttendanceStatus.halfDay).length,
-                      color: AppColors.accent500,
-                    ),
-                    const Spacer(),
-                    PopupMenuButton<AttendanceStatus>(
-                      child: Row(children: [const Icon(Icons.select_all_rounded, size: 18), const SizedBox(width: 4), const Text('Bulk', style: TextStyle(fontSize: 13, fontFamily: 'Inter'))]),
-                      onSelected: _bulkMarkAll,
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(value: AttendanceStatus.present, child: Text('Mark All Present')),
-                        const PopupMenuItem(value: AttendanceStatus.absent, child: Text('Mark All Absent')),
-                        const PopupMenuItem(value: AttendanceStatus.halfDay, child: Text('Mark All Half Day')),
-                        const PopupMenuItem(value: AttendanceStatus.leave, child: Text('Mark All Leave')),
-                      ],
+                    Expanded(
+                      child: Text(
+                        _isCapturingLocation
+                            ? 'Capturing location...'
+                            : (_currentAddress ?? ''),
+                        overflow:
+                            TextOverflow.ellipsis,
+                        style: theme
+                            .textTheme.bodySmall
+                            ?.copyWith(
+                          color:
+                              AppColors.primary700,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-              // Search
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: _filterEmployees,
-                  decoration: const InputDecoration(
-                    hintText: 'Search employee...',
-                    prefixIcon: Icon(Icons.search_rounded, size: 18),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  InkWell(
+                    onTap: _pickDate,
+                    child: InputDecorator(
+                      decoration:
+                          const InputDecoration(
+                        labelText: 'Date',
+                        prefixIcon: Icon(
+                          Icons
+                              .calendar_today_outlined,
+                        ),
+                      ),
+                      child: Text(
+                        DateFormat(
+                          'dd MMMM yyyy',
+                        ).format(_selectedDate),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  DropdownButtonFormField<String>(
+  value: _selectedLocation,
+  decoration: const InputDecoration(
+    labelText: 'Location Name *',
+    prefixIcon: Icon(
+      Icons.location_city_outlined,
+    ),
+  ),
+  items: const [
+    DropdownMenuItem(
+      value: 'Location 1',
+      child: Text('Location 1'),
+    ),
+    DropdownMenuItem(
+      value: 'Location 2',
+      child: Text('Location 2'),
+    ),
+    DropdownMenuItem(
+      value: 'Location 3',
+      child: Text('Location 3'),
+    ),
+  ],
+  onChanged: (value) {
+    setState(() {
+      _selectedLocation = value;
+    });
+  },
+  validator: (value) {
+    if (value == null || value.isEmpty) {
+      return 'Please select a location';
+    }
+    return null;
+  },
+),
+
+                  const SizedBox(height: 12),
+
+                  TextFormField(
+                    controller:
+                        _workSiteController,
+                    decoration:
+                        const InputDecoration(
+                      labelText: 'Work Site',
+                      prefixIcon: Icon(
+                        Icons
+                            .construction_outlined,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Container(
+              color: theme.colorScheme.surface,
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 10,
+              ),
+              child: Row(
+                children: [
+                  _SummaryChip(
+                    label: 'Present',
+                    count: presentCount,
+                    color: Colors.blue,
+                  ),
+                  const SizedBox(width: 8),
+                  _SummaryChip(
+                    label: 'Absent',
+                    count: absentCount,
+                    color: Colors.red,
+                  ),
+                  const Spacer(),
+                  PopupMenuButton<
+                      AttendanceStatus>(
+                    onSelected: _bulkMarkAll,
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value:
+                            AttendanceStatus
+                                .present,
+                        child: Text(
+                          'Mark All Present',
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value:
+                            AttendanceStatus
+                                .absent,
+                        child: Text(
+                          'Mark All Absent',
+                        ),
+                      ),
+                    ],
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons
+                              .select_all_rounded,
+                        ),
+                        SizedBox(width: 4),
+                        Text('Bulk'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(
+                16,
+                8,
+                16,
+                0,
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _filterEmployees,
+                decoration:
+                    const InputDecoration(
+                  hintText:
+                      'Search employee...',
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              // Employee list
-              Expanded(
-                child: _isLoadingEmployees
-                    ? const Center(child: CircularProgressIndicator())
-                    : _filteredEmployees.isEmpty
-                        ? const Center(child: Text('No employees found'))
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            itemCount: _filteredEmployees.length,
-                            itemBuilder: (_, i) {
-                              final emp = _filteredEmployees[i];
-                              return _EmployeeAttendanceRow(
-                                employee: emp,
-                                status: _attendance[emp.id] ?? AttendanceStatus.present,
-                                overtime: _overtime[emp.id] ?? 0,
-                                onStatusChanged: (s) => setState(() => _attendance[emp.id] = s),
-                                onOvertimeChanged: (v) => setState(() => _overtime[emp.id] = v),
-                              );
-                            },
+            ),
+
+            const SizedBox(height: 8),
+
+            Expanded(
+              child: _isLoadingEmployees
+                  ? const Center(
+                      child:
+                          CircularProgressIndicator(),
+                    )
+                  : _filteredEmployees
+                          .isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No employees found',
                           ),
-              ),
-            ],
-          ),
+                        )
+                      : ListView.builder(
+                          padding:
+                              const EdgeInsets
+                                  .fromLTRB(
+                            16,
+                            0,
+                            16,
+                            100,
+                          ),
+                          itemCount:
+                              _filteredEmployees
+                                  .length,
+                          itemBuilder:
+                              (_, index) {
+                            final emp =
+                                _filteredEmployees[
+                                    index];
+
+                            return _EmployeeAttendanceRow(
+                              employee: emp,
+                              status: _attendance[
+                                      emp.id] ??
+                                  AttendanceStatus
+                                      .present,
+                              onStatusChanged:
+                                  (status) {
+                                setState(() {
+                                  _attendance[
+                                      emp.id] = status;
+                                });
+                              },
+                            );
+                          },
+                        ),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Future<void> _pickDate() async {
     final date = await showDatePicker(
@@ -382,24 +562,21 @@ class _SummaryChip extends StatelessWidget {
 class _EmployeeAttendanceRow extends StatelessWidget {
   final EmployeeModel employee;
   final AttendanceStatus status;
-  final double overtime;
   final ValueChanged<AttendanceStatus> onStatusChanged;
-  final ValueChanged<double> onOvertimeChanged;
 
   const _EmployeeAttendanceRow({
+    super.key,
     required this.employee,
     required this.status,
-    required this.overtime,
     required this.onStatusChanged,
-    required this.onOvertimeChanged,
   });
 
   Color get _statusColor {
     switch (status) {
-      case AttendanceStatus.present: return AppColors.success500;
-      case AttendanceStatus.absent: return AppColors.error500;
-      case AttendanceStatus.halfDay: return AppColors.accent500;
-      case AttendanceStatus.leave: return AppColors.primary500;
+      case AttendanceStatus.present:
+        return Colors.blue;
+      case AttendanceStatus.absent:
+        return Colors.red;
     }
   }
 
@@ -407,84 +584,122 @@ class _EmployeeAttendanceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 10,
+      ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _statusColor.withOpacity(0.3)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: AppColors.primary100,
-                  child: Text(employee.name[0].toUpperCase(), style: const TextStyle(color: AppColors.primary600, fontWeight: FontWeight.w700, fontFamily: 'Inter', fontSize: 13)),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(employee.name, style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis),
-                      Text(employee.employeeCode, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.primary500)),
-                    ],
-                  ),
-                ),
-                _buildStatusSelector(context),
-              ],
-            ),
-            if (status == AttendanceStatus.present) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.access_time_rounded, size: 14, color: AppColors.secondary400),
-                  const SizedBox(width: 6),
-                  Text('Overtime hrs:', style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 60,
-                    child: TextFormField(
-                      initialValue: overtime.toString(),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: const TextStyle(fontSize: 13, fontFamily: 'Inter'),
-                      decoration: const InputDecoration(
-                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        isDense: true,
-                      ),
-                      onChanged: (v) => onOvertimeChanged(double.tryParse(v) ?? 0),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
+        border: Border.all(
+          color: _statusColor.withOpacity(0.30),
         ),
       ),
-    );
-  }
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: AppColors.primary100,
+            child: Text(
+              employee.name.isNotEmpty
+                  ? employee.name[0].toUpperCase()
+                  : '?',
+              style: const TextStyle(
+                color: AppColors.primary600,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+          ),
 
-  Widget _buildStatusSelector(BuildContext context) {
-    return SegmentedButton<AttendanceStatus>(
-      segments: const [
-        ButtonSegment(value: AttendanceStatus.present, label: Text('P', style: TextStyle(fontSize: 11, fontFamily: 'Inter'))),
-        ButtonSegment(value: AttendanceStatus.absent, label: Text('A', style: TextStyle(fontSize: 11, fontFamily: 'Inter'))),
-        ButtonSegment(value: AttendanceStatus.halfDay, label: Text('H', style: TextStyle(fontSize: 11, fontFamily: 'Inter'))),
-        ButtonSegment(value: AttendanceStatus.leave, label: Text('L', style: TextStyle(fontSize: 11, fontFamily: 'Inter'))),
-      ],
-      selected: {status},
-      onSelectionChanged: (s) => onStatusChanged(s.first),
-      style: ButtonStyle(
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        visualDensity: VisualDensity.compact,
-        padding: MaterialStateProperty.all(EdgeInsets.zero),
+          const SizedBox(width: 10),
+
+          Expanded(
+            child: Text(
+              employee.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          SizedBox(
+            width: 110,
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => onStatusChanged(
+                      AttendanceStatus.present,
+                    ),
+                    child: Container(
+                      height: 36,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: status ==
+                                AttendanceStatus.present
+                            ? Colors.blue
+                            : Colors.blue.withOpacity(0.10),
+                        borderRadius:
+                            BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'P',
+                        style: TextStyle(
+                          color: status ==
+                                  AttendanceStatus.present
+                              ? Colors.white
+                              : Colors.blue,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 6),
+
+                Expanded(
+                  child: InkWell(
+                    onTap: () => onStatusChanged(
+                      AttendanceStatus.absent,
+                    ),
+                    child: Container(
+                      height: 36,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: status ==
+                                AttendanceStatus.absent
+                            ? Colors.red
+                            : Colors.red.withOpacity(0.10),
+                        borderRadius:
+                            BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'A',
+                        style: TextStyle(
+                          color: status ==
+                                  AttendanceStatus.absent
+                              ? Colors.white
+                              : Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
-
 class AttendanceMapScreen extends ConsumerWidget {
   final String attendanceId;
   const AttendanceMapScreen({super.key, required this.attendanceId});
