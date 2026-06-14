@@ -420,20 +420,24 @@ class SupervisorDashboardScreen extends ConsumerStatefulWidget {
 
 class _SupervisorDashboardScreenState
     extends ConsumerState<SupervisorDashboardScreen> {
-  Timer? _refreshTimer;
+  Future<Map<String, dynamic>>? _statsFuture;
 
   @override
-void initState() {
-  super.initState();
-}
-
-  @override
-void dispose() {
-  super.dispose();
-}
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _statsFuture ??= _loadSupervisorStats(
+      ref,
+      ref.read(currentProfileProvider).valueOrNull?.id,
+    );
+  }
 
   Future<void> _refresh() async {
-    setState(() {});
+    setState(() {
+      _statsFuture = _loadSupervisorStats(
+        ref,
+        ref.read(currentProfileProvider).valueOrNull?.id,
+      );
+    });
   }
 
   @override
@@ -455,12 +459,13 @@ void dispose() {
         ],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
-        future: _loadSupervisorStats(ref, profile?.id),
+        future: _statsFuture,
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
           if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           final stats = snapshot.data!;
@@ -474,83 +479,78 @@ void dispose() {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-  padding: const EdgeInsets.all(16),
-  decoration: BoxDecoration(
-    gradient: const LinearGradient(
-      colors: [
-        AppColors.primary600,
-        AppColors.primary400,
-      ],
-    ),
-    borderRadius: BorderRadius.circular(16),
-  ),
-  child: Row(
-    children: [
-      CircleAvatar(
-        radius: 32,
-        backgroundColor: Colors.white24,
-        backgroundImage: profile?.profilePhotoUrl != null
-            ? NetworkImage(profile!.profilePhotoUrl!)
-            : null,
-        child: profile?.profilePhotoUrl == null
-            ? Text(
-                (profile?.fullName.isNotEmpty ?? false)
-                    ? profile!.fullName[0].toUpperCase()
-                    : 'S',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              )
-            : null,
-      ),
-      const SizedBox(width: 14),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              profile?.fullName ?? 'Supervisor',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontFamily: 'Inter',
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              DateFormat(
-                'EEEE, dd MMMM yyyy',
-              ).format(DateTime.now()),
-              style: const TextStyle(
-                color: Color(0xCCFFFFFF),
-                fontFamily: 'Inter',
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ],
-  ),
-),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          AppColors.primary600,
+                          AppColors.primary400,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 32,
+                          backgroundColor: Colors.white24,
+                          backgroundImage: profile?.profilePhotoUrl != null
+                              ? NetworkImage(profile!.profilePhotoUrl!)
+                              : null,
+                          child: profile?.profilePhotoUrl == null
+                              ? Text(
+                                  (profile?.fullName.isNotEmpty ?? false)
+                                      ? profile!.fullName[0].toUpperCase()
+                                      : 'S',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                profile?.fullName ?? 'Supervisor',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Inter',
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                DateFormat('EEEE, dd MMMM yyyy').format(DateTime.now()),
+                                style: const TextStyle(
+                                  color: Color(0xCCFFFFFF),
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
                   const SizedBox(height: 20),
 
-                  const w.SectionHeader(
-                    title: 'Today\'s Status',
-                  ),
+                  const w.SectionHeader(title: 'Today\'s Status'),
 
                   const SizedBox(height: 12),
 
                   GridView.count(
                     shrinkWrap: true,
-                    physics:
-                        const NeverScrollableScrollPhysics(),
+                    physics: const NeverScrollableScrollPhysics(),
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
@@ -558,39 +558,32 @@ void dispose() {
                     children: [
                       w.StatCard(
                         title: 'Employees',
-                        value:
-                            '${stats['total_employees']}',
+                        value: '${stats['total_employees']}',
                         icon: Icons.people_outline,
                         color: AppColors.primary500,
                       ),
                       w.StatCard(
                         title: 'Attendance Today',
-                        value: stats['today_submitted'] ==
-                                true
-                            ? 'Submitted'
-                            : 'Pending',
-                        icon:
-                            Icons.calendar_today_outlined,
-                        color: stats['today_submitted'] ==
-                                true
+                        value: stats['today_submitted'] == true ? 'Submitted' : 'Pending',
+                        icon: Icons.calendar_today_outlined,
+                        color: stats['today_submitted'] == true
                             ? AppColors.success500
                             : AppColors.accent500,
                       ),
                       w.StatCard(
-  title: 'Pending Expenses',
-  value: '${stats['pending_today']}',
-  subtitle: 'Today',
-  icon: Icons.receipt_long_outlined,
-  color: AppColors.accent500,
-),
-
-w.StatCard(
-  title: 'Approved Expenses',
-  value: '${stats['approved_today']}',
-  subtitle: 'Today',
-  icon: Icons.check_circle_outline,
-  color: AppColors.success500,
-),
+                        title: 'Pending Expenses',
+                        value: '${stats['pending_today']}',
+                        subtitle: 'Today',
+                        icon: Icons.receipt_long_outlined,
+                        color: AppColors.accent500,
+                      ),
+                      w.StatCard(
+                        title: 'Approved Expenses',
+                        value: '${stats['approved_today']}',
+                        subtitle: 'Today',
+                        icon: Icons.check_circle_outline,
+                        color: AppColors.success500,
+                      ),
                     ],
                   ),
 
@@ -600,29 +593,17 @@ w.StatCard(
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          icon: const Icon(
-                            Icons.calendar_today_rounded,
-                            size: 18,
-                          ),
-                          label:
-                              const Text('Mark Attendance'),
-                          onPressed: () => context.push(
-                            '/attendance/new',
-                          ),
+                          icon: const Icon(Icons.calendar_today_rounded, size: 18),
+                          label: const Text('Mark Attendance'),
+                          onPressed: () => context.push('/attendance/new'),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton.icon(
-                          icon: const Icon(
-                            Icons.add_rounded,
-                            size: 18,
-                          ),
-                          label:
-                              const Text('Add Expense'),
-                          onPressed: () => context.push(
-                            '/expenses/new',
-                          ),
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          label: const Text('Add Expense'),
+                          onPressed: () => context.push('/expenses/new'),
                         ),
                       ),
                     ],
@@ -639,71 +620,70 @@ w.StatCard(
   }
 
   Future<Map<String, dynamic>> _loadSupervisorStats(
-  WidgetRef ref,
-  String? profileId,
-) async {
-  if (profileId == null) {
+    WidgetRef ref,
+    String? profileId,
+  ) async {
+    if (profileId == null) {
+      return {
+        'total_employees': 0,
+        'today_submitted': false,
+        'pending_today': 0,
+        'approved_today': 0,
+      };
+    }
+
+    final client = ref.read(supabaseProvider);
+
+    final sup = await client
+        .from('supervisors')
+        .select('id')
+        .eq('profile_id', profileId)
+        .maybeSingle();
+
+    if (sup == null) {
+      return {
+        'total_employees': 0,
+        'today_submitted': false,
+        'pending_today': 0,
+        'approved_today': 0,
+      };
+    }
+
+    final supervisorId = sup['id'] as String;
+
+    final employees = await client
+        .from('supervisor_employees')
+        .select('id')
+        .eq('supervisor_id', supervisorId);
+
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    final todayAtt = await client
+        .from('attendance')
+        .select('id')
+        .eq('supervisor_id', supervisorId)
+        .eq('attendance_date', today)
+        .maybeSingle();
+
+    final pendingToday = await client
+        .from('expenses')
+        .select('id')
+        .eq('supervisor_id', supervisorId)
+        .eq('expense_date', today)
+        .eq('status', 'pending');
+
+    final approvedToday = await client
+        .from('expenses')
+        .select('id')
+        .eq('supervisor_id', supervisorId)
+        .eq('expense_date', today)
+        .eq('status', 'approved');
+
     return {
-      'total_employees': 0,
-      'today_submitted': false,
-      'pending_today': 0,
-      'approved_today': 0,
+      'total_employees': (employees as List).length,
+      'today_submitted': todayAtt != null,
+      'pending_today': (pendingToday as List).length,
+      'approved_today': (approvedToday as List).length,
     };
   }
-
-  final client = ref.read(supabaseProvider);
-
-  final sup = await client
-      .from('supervisors')
-      .select('id')
-      .eq('profile_id', profileId)
-      .maybeSingle();
-
-  if (sup == null) {
-    return {
-      'total_employees': 0,
-      'today_submitted': false,
-      'pending_today': 0,
-      'approved_today': 0,
-    };
-  }
-
-  final supervisorId = sup['id'] as String;
-
-  final employees = await client
-      .from('supervisor_employees')
-      .select('id')
-      .eq('supervisor_id', supervisorId);
-
-  final today =
-      DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-  final todayAtt = await client
-      .from('attendance')
-      .select('id')
-      .eq('supervisor_id', supervisorId)
-      .eq('attendance_date', today)
-      .maybeSingle();
-
-  final pendingToday = await client
-      .from('expenses')
-      .select('id')
-      .eq('supervisor_id', supervisorId)
-      .eq('expense_date', today)
-      .eq('status', 'pending');
-
-  final approvedToday = await client
-      .from('expenses')
-      .select('id')
-      .eq('supervisor_id', supervisorId)
-      .eq('expense_date', today)
-      .eq('status', 'approved');
-
-  return {
-    'total_employees': (employees as List).length,
-    'today_submitted': todayAtt != null,
-    'pending_today': (pendingToday as List).length,
-    'approved_today': (approvedToday as List).length,
-  };
-}
 }
