@@ -569,20 +569,38 @@ class AttendanceRepository {
   }
 
   Future<Map<String, int>> getTodaySummary() async {
-    final today = DateTime.now().toIso8601String().split('T').first;
-    final data = await _client
-        .from('attendance_details')
-        .select('status')
-        .gte('created_at', '${today}T00:00:00')
-        .lte('created_at', '${today}T23:59:59');
+  final today = DateTime.now()
+      .toIso8601String()
+      .split('T')
+      .first;
 
-    final counts = {'present': 0, 'absent': 0, 'half_day': 0, 'leave': 0};
-    for (final row in data as List) {
-      final status = row['status'] as String;
-      counts[status] = (counts[status] ?? 0) + 1;
+  final attendance = await _client
+      .from('attendance')
+      .select('attendance_details(status)')
+      .eq('attendance_date', today);
+
+  final counts = <String, int>{
+    'present': 0,
+    'absent': 0,
+    'half_day': 0,
+    'leave': 0,
+  };
+
+  for (final record in attendance as List) {
+    final details =
+        record['attendance_details'] as List<dynamic>? ?? [];
+
+    for (final detail in details) {
+      final status = detail['status'] as String?;
+
+      if (status != null) {
+        counts[status] = (counts[status] ?? 0) + 1;
+      }
     }
-    return counts;
   }
+
+  return counts;
+}
 
   Future<void> _logAudit(String action, String entity, String entityId) async {
     final userId = _client.auth.currentUser?.id;
