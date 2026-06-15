@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -19,120 +18,95 @@ class AdminDashboardScreen extends ConsumerWidget {
     final profile = ref.watch(currentProfileProvider).valueOrNull;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: const Color(0xFFF5F6FA),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 140,
+            expandedHeight: 160,
             pinned: true,
             backgroundColor: AppColors.primary600,
             surfaceTintColor: Colors.transparent,
             flexibleSpace: FlexibleSpaceBar(
-              title: null,
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      AppColors.primary700,
-                      AppColors.primary500,
-                    ],
+                    colors: [AppColors.primary700, AppColors.primary500],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                 ),
                 child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      16,
-                      16,
-                      16,
-                      0,
-                    ),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            CircleAvatar(
-                              radius: 20,
-                              backgroundColor:
-                                  Colors.white.withOpacity(
-                                0.2,
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
                                 Icons.business_center_rounded,
                                 color: Colors.white,
-                                size: 20,
+                                size: 22,
                               ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'Welcome Admin',
+                                    'Welcome back,',
                                     style: TextStyle(
-                                      color:
-                                          Color(0xBBFFFFFF),
-                                      fontSize: 12,
-                                      fontFamily:
-                                          'Inter',
+                                      color: Color(0xCCFFFFFF),
+                                      fontSize: 13,
+                                      fontFamily: 'Inter',
                                     ),
                                   ),
                                   Text(
-                                    profile?.fullName ??
-                                        'Admin',
+                                    profile?.fullName ?? 'Admin',
                                     maxLines: 1,
-                                    overflow:
-                                        TextOverflow
-                                            .ellipsis,
-                                    style:
-                                        const TextStyle(
-                                      color:
-                                          Colors.white,
-                                      fontSize: 15,
-                                      fontWeight:
-                                          FontWeight
-                                              .w600,
-                                      fontFamily:
-                                          'Inter',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      fontFamily: 'Inter',
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(
-                                Icons
-                                    .notifications_outlined,
-                                color: Colors.white,
-                              ),
-                              onPressed: () => context
-                                  .push(
-                                      '/notifications'),
+                              icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+                              onPressed: () => context.push('/notifications'),
                             ),
                             IconButton(
-                              icon: const Icon(
-                                Icons.settings_outlined,
-                                color: Colors.white,
-                              ),
-                              onPressed: () => context
-                                  .push('/settings'),
+                              icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                              onPressed: () => context.push('/settings'),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          DateFormat(
-                            'EEEE, dd MMMM yyyy',
-                          ).format(DateTime.now()),
-                          style: const TextStyle(
-                            color: Color(0xBBFFFFFF),
-                            fontSize: 12,
-                            fontFamily: 'Inter',
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            DateFormat('EEEE, dd MMMM yyyy').format(DateTime.now()),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontFamily: 'Inter',
+                            ),
                           ),
                         ),
                       ],
@@ -146,50 +120,40 @@ class AdminDashboardScreen extends ConsumerWidget {
             child: stats.when(
               loading: () => const Padding(
                 padding: EdgeInsets.all(32),
-                child: Center(
-                  child:
-                      CircularProgressIndicator(),
-                ),
+                child: Center(child: CircularProgressIndicator()),
               ),
               error: (e, stack) => Padding(
-  padding: const EdgeInsets.all(16),
-  child: Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.red.shade50,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Colors.red.shade200),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Dashboard Error:',
-          style: TextStyle(
-            color: Colors.red,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          e.toString(),
-          style: const TextStyle(color: Colors.red),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          stack.toString().substring(0, 500),
-          style: const TextStyle(
-            color: Colors.red,
-            fontSize: 11,
-          ),
-        ),
-      ],
-    ),
-  ),
-),
-              data: (data) =>
-                  _DashboardBody(stats: data),
+                padding: const EdgeInsets.all(16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Dashboard Error:',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(e.toString(), style: const TextStyle(color: Colors.red)),
+                      const SizedBox(height: 8),
+                      Text(
+                        stack.toString().substring(0, 500),
+                        style: const TextStyle(color: Colors.red, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              data: (data) => _DashboardBody(stats: data),
             ),
           ),
         ],
@@ -200,7 +164,6 @@ class AdminDashboardScreen extends ConsumerWidget {
 
 class _DashboardBody extends StatelessWidget {
   final Map<String, dynamic> stats;
-
   const _DashboardBody({required this.stats});
 
   @override
@@ -210,135 +173,202 @@ class _DashboardBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const w.SectionHeader(
-            title: 'Admin Actions',
-          ),
-
+          const SizedBox(height: 4),
+          _sectionLabel('Quick Actions'),
           const SizedBox(height: 12),
-
           _QuickActions(),
-
           const SizedBox(height: 24),
-
-          const w.SectionHeader(
-            title: 'Today\'s Overview',
-          ),
-
+          _sectionLabel("Today's Overview"),
           const SizedBox(height: 12),
-
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.4,
-            children: [
-              w.StatCard(
-                title: 'Total Employees',
-                value: '${stats['total_employees']}',
-                icon: Icons.people_outline_rounded,
-                color: AppColors.primary500,
-              ),
-              w.StatCard(
-                title: 'Present Today',
-                value: '${stats['today_present']}',
-                icon: Icons.check_circle_outline_rounded,
-                color: AppColors.success500,
-              ),
-              w.StatCard(
-                title: 'Absent Today',
-                value: '${stats['today_absent']}',
-                icon: Icons.cancel_outlined,
-                color: AppColors.error500,
-              ),
-              w.StatCard(
-                title: 'Active Employees',
-                value: '${stats['active_employees']}',
-                icon: Icons.person_outline_rounded,
-                color: AppColors.secondary500,
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          const w.SectionHeader(
-            title: 'Today\'s Expense Overview',
-          ),
-
-          const SizedBox(height: 12),
-
           Row(
             children: [
               Expanded(
-                child: w.StatCard(
-                  title: 'Pending',
-                  value: CurrencyUtils.formatCompact(
-                    stats['expense_pending'] ?? 0,
-                  ),
-                  icon: Icons.pending_outlined,
-                  color: AppColors.accent500,
+                child: _StatCard(
+                  title: 'Total Employees',
+                  value: '${stats['total_employees']}',
+                  icon: Icons.people_rounded,
+                  iconColor: AppColors.primary500,
+                  iconBg: AppColors.primary50,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: w.StatCard(
-                  title: 'Approved',
-                  value: CurrencyUtils.formatCompact(
-                    stats['expense_approved'] ?? 0,
-                  ),
-                  icon: Icons.check_circle_outline,
-                  color: AppColors.success500,
+                child: _StatCard(
+                  title: 'Active',
+                  value: '${stats['active_employees']}',
+                  icon: Icons.person_rounded,
+                  iconColor: AppColors.secondary500,
+                  iconBg: const Color(0xFFEEF2FF),
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 24),
-
-          const w.SectionHeader(
-            title: 'Payroll Overview',
-          ),
-
           const SizedBox(height: 12),
-
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 0.9,
+          Row(
             children: [
-              w.StatCard(
-                title: 'Liability',
-                value: CurrencyUtils.formatCompact(
-                  stats['payroll_liability'] ?? 0,
+              Expanded(
+                child: _StatCard(
+                  title: 'Present Today',
+                  value: '${stats['today_present']}',
+                  icon: Icons.check_circle_rounded,
+                  iconColor: AppColors.success500,
+                  iconBg: const Color(0xFFE8F5E9),
                 ),
-                icon: Icons.account_balance_outlined,
-                color: AppColors.primary500,
               ),
-              w.StatCard(
-                title: 'Paid',
-                value: CurrencyUtils.formatCompact(
-                  stats['payroll_paid'] ?? 0,
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  title: 'Absent Today',
+                  value: '${stats['today_absent']}',
+                  icon: Icons.cancel_rounded,
+                  iconColor: AppColors.error500,
+                  iconBg: const Color(0xFFFFEBEE),
                 ),
-                icon: Icons.payments_outlined,
-                color: AppColors.success500,
-              ),
-              w.StatCard(
-                title: 'Pending',
-                value: CurrencyUtils.formatCompact(
-                  stats['payroll_pending'] ?? 0,
-                ),
-                icon: Icons.hourglass_bottom_rounded,
-                color: AppColors.accent500,
               ),
             ],
           ),
-
+          const SizedBox(height: 24),
+          _sectionLabel("Expense Overview"),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  title: 'Pending',
+                  value: CurrencyUtils.formatCompact(stats['expense_pending'] ?? 0),
+                  icon: Icons.pending_rounded,
+                  iconColor: AppColors.accent500,
+                  iconBg: const Color(0xFFFFF8E1),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  title: 'Approved',
+                  value: CurrencyUtils.formatCompact(stats['expense_approved'] ?? 0),
+                  icon: Icons.check_circle_rounded,
+                  iconColor: AppColors.success500,
+                  iconBg: const Color(0xFFE8F5E9),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _sectionLabel("Payroll Overview"),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  title: 'Liability',
+                  value: CurrencyUtils.formatCompact(stats['payroll_liability'] ?? 0),
+                  icon: Icons.account_balance_rounded,
+                  iconColor: AppColors.primary500,
+                  iconBg: AppColors.primary50,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  title: 'Paid',
+                  value: CurrencyUtils.formatCompact(stats['payroll_paid'] ?? 0),
+                  icon: Icons.payments_rounded,
+                  iconColor: AppColors.success500,
+                  iconBg: const Color(0xFFE8F5E9),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  title: 'Pending',
+                  value: CurrencyUtils.formatCompact(stats['payroll_pending'] ?? 0),
+                  icon: Icons.hourglass_bottom_rounded,
+                  iconColor: AppColors.accent500,
+                  iconBg: const Color(0xFFFFF8E1),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+        fontFamily: 'Inter',
+        color: Color(0xFF1A1A2E),
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Inter',
+              color: Color(0xFF1A1A2E),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              fontFamily: 'Inter',
+              color: Color(0xFF8A8FA3),
+            ),
+          ),
         ],
       ),
     );
@@ -348,92 +378,79 @@ class _DashboardBody extends StatelessWidget {
 class _QuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            _QuickActionBtn(
-              icon: Icons.people_rounded,
-              label: 'Employees',
-              onTap: () => context.push('/employees'),
-            ),
-            const SizedBox(width: 8),
-            _QuickActionBtn(
-              icon: Icons.supervisor_account_rounded,
-              label: 'Supervisors',
-              onTap: () => context.push('/supervisors'),
-            ),
-            const SizedBox(width: 8),
-            _QuickActionBtn(
-              icon: Icons.calendar_today_rounded,
-              label: 'Attendance',
-              onTap: () => context.push('/attendance'),
-            ),
-            const SizedBox(width: 8),
-            _QuickActionBtn(
-              icon: Icons.receipt_long_rounded,
-              label: 'Expenses',
-              onTap: () => context.push('/expenses'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _QuickActionBtn(
-              icon: Icons.payments_rounded,
-              label: 'Payroll',
-              onTap: () => context.push('/payroll'),
-            ),
-            const SizedBox(width: 8),
-            _QuickActionBtn(
-              icon: Icons.bar_chart_rounded,
-              label: 'Reports',
-              onTap: () => context.push('/reports'),
-            ),
-            const SizedBox(width: 8),
-            _QuickActionBtn(
-              icon: Icons.settings_rounded,
-              label: 'Settings',
-              onTap: () => context.push('/settings'),
-            ),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: SizedBox(),
-            ),
-          ],
-        ),
-      ],
+    final actions = [
+      _ActionItem(Icons.people_rounded, 'Employees', '/employees'),
+      _ActionItem(Icons.supervisor_account_rounded, 'Supervisors', '/supervisors'),
+      _ActionItem(Icons.calendar_today_rounded, 'Attendance', '/attendance'),
+      _ActionItem(Icons.receipt_long_rounded, 'Expenses', '/expenses'),
+      _ActionItem(Icons.payments_rounded, 'Payroll', '/payroll'),
+      _ActionItem(Icons.bar_chart_rounded, 'Reports', '/reports'),
+      _ActionItem(Icons.settings_rounded, 'Settings', '/settings'),
+    ];
+
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 4,
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+      childAspectRatio: 0.9,
+      children: actions.map((a) => _QuickActionBtn(item: a)).toList(),
     );
   }
 }
 
-class _QuickActionBtn extends StatelessWidget {
+class _ActionItem {
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final String path;
+  _ActionItem(this.icon, this.label, this.path);
+}
 
-  const _QuickActionBtn({required this.icon, required this.label, required this.onTap});
+class _QuickActionBtn extends StatelessWidget {
+  final _ActionItem item;
+  const _QuickActionBtn({required this.item});
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.secondary200),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: AppColors.primary500, size: 22),
-              const SizedBox(height: 4),
-              Text(label, style: Theme.of(context).textTheme.labelSmall, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
-            ],
-          ),
+    return GestureDetector(
+      onTap: () => context.push(item.path),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary50,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(item.icon, color: AppColors.primary500, size: 20),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              item.label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Inter',
+                color: Color(0xFF4A4A6A),
+              ),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );
@@ -475,8 +492,11 @@ class _SupervisorDashboardScreenState
     final profile = ref.watch(currentProfileProvider).valueOrNull;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
         title: const Text('Dashboard'),
+        backgroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
@@ -508,21 +528,28 @@ class _SupervisorDashboardScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Header card
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [
-                          AppColors.primary600,
-                          AppColors.primary400,
-                        ],
+                        colors: [AppColors.primary700, AppColors.primary400],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary500.withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: Row(
                       children: [
                         CircleAvatar(
-                          radius: 32,
+                          radius: 28,
                           backgroundColor: Colors.white24,
                           backgroundImage: profile?.profilePhotoUrl != null
                               ? NetworkImage(profile!.profilePhotoUrl!)
@@ -534,7 +561,7 @@ class _SupervisorDashboardScreenState
                                       : 'S',
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 24,
+                                    fontSize: 22,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 )
@@ -545,6 +572,14 @@ class _SupervisorDashboardScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              const Text(
+                                'Welcome back,',
+                                style: TextStyle(
+                                  color: Color(0xCCFFFFFF),
+                                  fontSize: 13,
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
                               Text(
                                 profile?.fullName ?? 'Supervisor',
                                 maxLines: 1,
@@ -562,7 +597,7 @@ class _SupervisorDashboardScreenState
                                 style: const TextStyle(
                                   color: Color(0xCCFFFFFF),
                                   fontFamily: 'Inter',
-                                  fontSize: 13,
+                                  fontSize: 12,
                                 ),
                               ),
                             ],
@@ -572,47 +607,70 @@ class _SupervisorDashboardScreenState
                     ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-                  const w.SectionHeader(title: 'Today\'s Status'),
+                  const Text(
+                    "Today's Status",
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Inter',
+                      color: Color(0xFF1A1A2E),
+                    ),
+                  ),
 
                   const SizedBox(height: 12),
 
-                  GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 1.15,
+                  Row(
                     children: [
-                      w.StatCard(
-                        title: 'Employees',
-                        value: '${stats['total_employees']}',
-                        icon: Icons.people_outline,
-                        color: AppColors.primary500,
+                      Expanded(
+                        child: _StatCard(
+                          title: 'Employees',
+                          value: '${stats['total_employees']}',
+                          icon: Icons.people_rounded,
+                          iconColor: AppColors.primary500,
+                          iconBg: AppColors.primary50,
+                        ),
                       ),
-                      w.StatCard(
-                        title: 'Attendance Today',
-                        value: stats['today_submitted'] == true ? 'Submitted' : 'Pending',
-                        icon: Icons.calendar_today_outlined,
-                        color: stats['today_submitted'] == true
-                            ? AppColors.success500
-                            : AppColors.accent500,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatCard(
+                          title: 'Attendance',
+                          value: stats['today_submitted'] == true ? 'Done ✓' : 'Pending',
+                          icon: Icons.calendar_today_rounded,
+                          iconColor: stats['today_submitted'] == true
+                              ? AppColors.success500
+                              : AppColors.accent500,
+                          iconBg: stats['today_submitted'] == true
+                              ? const Color(0xFFE8F5E9)
+                              : const Color(0xFFFFF8E1),
+                        ),
                       ),
-                      w.StatCard(
-                        title: 'Pending Expenses',
-                        value: '${stats['pending_today']}',
-                        subtitle: 'Today',
-                        icon: Icons.receipt_long_outlined,
-                        color: AppColors.accent500,
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          title: 'Pending Expenses',
+                          value: '${stats['pending_today']}',
+                          icon: Icons.receipt_long_rounded,
+                          iconColor: AppColors.accent500,
+                          iconBg: const Color(0xFFFFF8E1),
+                        ),
                       ),
-                      w.StatCard(
-                        title: 'Approved Expenses',
-                        value: '${stats['approved_today']}',
-                        subtitle: 'Today',
-                        icon: Icons.check_circle_outline,
-                        color: AppColors.success500,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatCard(
+                          title: 'Approved Expenses',
+                          value: '${stats['approved_today']}',
+                          icon: Icons.check_circle_rounded,
+                          iconColor: AppColors.success500,
+                          iconBg: const Color(0xFFE8F5E9),
+                        ),
                       ),
                     ],
                   ),
@@ -622,17 +680,33 @@ class _SupervisorDashboardScreenState
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton.icon(
+                        child: ElevatedButton.icon(
                           icon: const Icon(Icons.calendar_today_rounded, size: 18),
                           label: const Text('Mark Attendance'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary500,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                           onPressed: () => context.push('/attendance/new'),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: OutlinedButton.icon(
+                        child: ElevatedButton.icon(
                           icon: const Icon(Icons.add_rounded, size: 18),
                           label: const Text('Add Expense'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.accent500,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                           onPressed: () => context.push('/expenses/new'),
                         ),
                       ),
