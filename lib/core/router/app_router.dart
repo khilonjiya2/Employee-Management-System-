@@ -8,6 +8,7 @@ import '../../data/repositories/auth_repository.dart';
 
 import '../../presentation/auth/login_screen.dart';
 import '../../presentation/auth/forgot_password_screen.dart';
+import '../../presentation/auth/force_password_change_screen.dart';
 
 import '../../presentation/dashboard/admin_dashboard_screen.dart';
 import '../../presentation/dashboard/supervisor_dashboard_screen.dart';
@@ -17,12 +18,11 @@ import '../../presentation/employees/employee_form_screen.dart';
 import '../../presentation/employees/employee_detail_screen.dart';
 
 import '../../presentation/supervisors/supervisors_list_screen.dart';
-import '../../presentation/supervisors/supervisor_form_screen.dart';
-import '../../presentation/supervisors/supervisor_detail_screen.dart';
 
 import '../../presentation/attendance/attendance_list_screen.dart';
 import '../../presentation/attendance/attendance_entry_screen.dart';
 import '../../presentation/attendance/attendance_map_screen.dart';
+import '../../presentation/attendance/attendance_detail_screen.dart';
 
 import '../../presentation/expenses/expenses_list_screen.dart';
 import '../../presentation/expenses/expense_form_screen.dart';
@@ -52,10 +52,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isPublicRoute = [
         '/login',
         '/forgot-password',
+        '/change-password',
       ].contains(state.matchedLocation);
 
       if (!isLoggedIn && !isPublicRoute) return '/login';
-      if (isLoggedIn && isPublicRoute) return '/dashboard';
+      if (isLoggedIn && (state.matchedLocation == '/login' ||
+          state.matchedLocation == '/forgot-password')) {
+        return '/dashboard';
+      }
+
+      // Force password change check
+      if (isLoggedIn && state.matchedLocation != '/change-password') {
+        final profile = ref.read(currentProfileProvider).valueOrNull;
+        if (profile?.mustChangePassword == true) {
+          return '/change-password';
+        }
+      }
 
       return null;
     },
@@ -71,11 +83,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/forgot-password',
         builder: (_, __) => const ForgotPasswordScreen(),
       ),
+      GoRoute(
+        name: 'change-password',
+        path: '/change-password',
+        builder: (_, __) => const ForcePasswordChangeScreen(),
+      ),
 
       ShellRoute(
-        builder: (context, state, child) {
-          return MainShell(child: child);
-        },
+        builder: (context, state, child) => MainShell(child: child),
         routes: [
           GoRoute(
             name: 'dashboard',
@@ -96,16 +111,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 name: 'employee-detail',
                 path: ':id',
-                builder: (_, state) => EmployeeDetailScreen(
-                  id: state.pathParameters['id']!,
-                ),
+                builder: (_, state) =>
+                    EmployeeDetailScreen(id: state.pathParameters['id']!),
               ),
               GoRoute(
                 name: 'employee-edit',
                 path: ':id/edit',
                 builder: (_, state) => EmployeeFormScreen(
-                  employeeId: state.pathParameters['id']!,
-                ),
+                    employeeId: state.pathParameters['id']!),
               ),
             ],
           ),
@@ -123,16 +136,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 name: 'supervisor-detail',
                 path: ':id',
-                builder: (_, state) => SupervisorDetailScreen(
-                  id: state.pathParameters['id']!,
-                ),
+                builder: (_, state) =>
+                    SupervisorDetailScreen(id: state.pathParameters['id']!),
               ),
               GoRoute(
                 name: 'supervisor-edit',
                 path: ':id/edit',
                 builder: (_, state) => SupervisorFormScreen(
-                  supervisorId: state.pathParameters['id']!,
-                ),
+                    supervisorId: state.pathParameters['id']!),
               ),
             ],
           ),
@@ -148,11 +159,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 builder: (_, __) => const AttendanceEntryScreen(),
               ),
               GoRoute(
+                name: 'attendance-edit',
+                path: ':id/edit',
+                builder: (_, state) => AttendanceEntryScreen(
+                    attendanceId: state.pathParameters['id']!),
+              ),
+              GoRoute(
+                name: 'attendance-detail',
+                path: ':id/detail',
+                builder: (_, state) => AttendanceDetailScreen(
+                    attendanceId: state.pathParameters['id']!),
+              ),
+              GoRoute(
                 name: 'attendance-map',
                 path: ':id/map',
-                builder: (_, state) => AttendanceMapScreen(
-                  attendanceId: state.pathParameters['id']!,
-                ),
+                builder: (_, state) =>
+                    AttendanceMapScreen(attendanceId: state.pathParameters['id']!),
               ),
             ],
           ),
@@ -170,16 +192,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 name: 'expense-detail',
                 path: ':id',
-                builder: (_, state) => ExpenseDetailScreen(
-                  id: state.pathParameters['id']!,
-                ),
+                builder: (_, state) =>
+                    ExpenseDetailScreen(id: state.pathParameters['id']!),
               ),
               GoRoute(
                 name: 'expense-edit',
                 path: ':id/edit',
-                builder: (_, state) => ExpenseFormScreen(
-                  expenseId: state.pathParameters['id']!,
-                ),
+                builder: (_, state) =>
+                    ExpenseFormScreen(expenseId: state.pathParameters['id']!),
               ),
             ],
           ),
@@ -197,9 +217,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 name: 'payroll-detail',
                 path: ':id',
-                builder: (_, state) => PayrollDetailScreen(
-                  id: state.pathParameters['id']!,
-                ),
+                builder: (_, state) =>
+                    PayrollDetailScreen(id: state.pathParameters['id']!),
               ),
             ],
           ),
@@ -209,13 +228,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/reports',
             builder: (_, __) => const ReportsScreen(),
           ),
-
           GoRoute(
             name: 'settings',
             path: '/settings',
             builder: (_, __) => const SettingsScreen(),
           ),
-
           GoRoute(
             name: 'notifications',
             path: '/notifications',
@@ -225,18 +242,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
 
-    errorBuilder: (context, state) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Page Not Found'),
-        ),
-        body: Center(
-          child: Text(
-            state.error?.toString() ?? 'Unknown routing error',
-          ),
-        ),
-      );
-    },
+    errorBuilder: (context, state) => Scaffold(
+      appBar: AppBar(title: const Text('Page Not Found')),
+      body: Center(
+          child: Text(state.error?.toString() ?? 'Unknown routing error')),
+    ),
   );
 });
 
@@ -246,22 +256,13 @@ class DashboardRouterWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider);
-
     return profile.when(
-      loading: () => const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      ),
-      error: (e, _) => Scaffold(
-        body: Center(
-          child: Text('Failed to load profile: $e'),
-        ),
-      ),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) =>
+          Scaffold(body: Center(child: Text('Failed to load profile: $e'))),
       data: (profile) {
-        if (profile?.role == 'admin') {
-          return const AdminDashboardScreen();
-        }
+        if (profile?.role == 'admin') return const AdminDashboardScreen();
         return const SupervisorDashboardScreen();
       },
     );
@@ -271,9 +272,8 @@ class DashboardRouterWidget extends ConsumerWidget {
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<dynamic> stream) {
     notifyListeners();
-    _subscription = stream
-        .asBroadcastStream()
-        .listen((_) => notifyListeners());
+    _subscription =
+        stream.asBroadcastStream().listen((_) => notifyListeners());
   }
 
   late final StreamSubscription<dynamic> _subscription;
