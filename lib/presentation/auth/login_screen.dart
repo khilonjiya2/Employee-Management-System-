@@ -93,12 +93,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget _buildHeader(ThemeData theme) {
     return Column(
       children: [
-        ClipOval(
-          child: Image.asset(
-            'assets/images/logo.png',
-            width: 100,
-            height: 100,
-            fit: BoxFit.cover,
+        Image.asset(
+          'assets/images/logo.png',
+          width: 100,
+          height: 100,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stack) => const Icon(
+            Icons.business_center_rounded,
+            size: 100,
           ),
         ),
         const SizedBox(height: 20),
