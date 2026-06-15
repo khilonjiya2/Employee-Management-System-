@@ -17,7 +17,8 @@ enum AttendanceStatus {
 }
 
 class AttendanceEntryScreen extends ConsumerStatefulWidget {
-  const AttendanceEntryScreen({super.key});
+  final String? attendanceId;
+  const AttendanceEntryScreen({super.key, this.attendanceId});
 
   @override
   ConsumerState<AttendanceEntryScreen> createState() => _AttendanceEntryScreenState();
@@ -40,11 +41,35 @@ String? _selectedLocation;
   String? _currentAddress;
   bool _isCapturingLocation = false;
 
+  bool get isEditing => widget.attendanceId != null;
+
   @override
   void initState() {
     super.initState();
     _loadEmployees();
     _captureLocation();
+    if (isEditing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadExisting());
+    }
+  }
+
+  Future<void> _loadExisting() async {
+    final att = await ref
+        .read(attendanceRepositoryProvider)
+        .getById(widget.attendanceId!);
+    if (att == null || !mounted) return;
+    _selectedDate = att.attendanceDate;
+    _selectedLocationId = att.locationId;
+    _selectedLocation = att.locationName;
+    _workSiteController.text = att.workSiteName ?? '';
+    if (att.details != null) {
+      for (final d in att.details!) {
+        _attendance[d.employeeId] = d.status == 'present'
+            ? AttendanceStatus.present
+            : AttendanceStatus.absent;
+      }
+    }
+    setState(() {});
   }
 
   @override
@@ -223,11 +248,22 @@ void dispose() {
   ),
 }).toList();
 
-      await ref.read(attendanceRepositoryProvider).createWithDetails(attendanceData, detailsData);
+      if (isEditing) {
+        await ref.read(attendanceRepositoryProvider).updateDetails(
+            widget.attendanceId!, attendanceData, detailsData);
+      } else {
+        await ref.read(attendanceRepositoryProvider).createWithDetails(
+            attendanceData, detailsData);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Attendance submitted successfully'), backgroundColor: AppColors.success500),
+          SnackBar(
+          content: Text(isEditing
+              ? 'Attendance updated and sent for re-approval'
+              : 'Attendance submitted successfully'),
+          backgroundColor: AppColors.success500,
+        ),
         );
         context.pop();
       }
@@ -264,8 +300,8 @@ Widget build(BuildContext context) {
 
   return Scaffold(
     appBar: AppBar(
-      title: const Text('Mark Attendance'),
-    ),
+        title: Text(isEditing ? 'Edit Attendance' : 'Mark Attendance'),
+      ),
 
     bottomNavigationBar: SafeArea(
       child: Padding(
