@@ -62,18 +62,8 @@ class AdminDashboardScreen extends ConsumerWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'Welcome back,',
+                                    'Welcome Admin',
                                     style: TextStyle(
-                                      color: Color(0xCCFFFFFF),
-                                      fontSize: 13,
-                                      fontFamily: 'Inter',
-                                    ),
-                                  ),
-                                  Text(
-                                    profile?.fullName ?? 'Admin',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 18,
                                       fontWeight: FontWeight.w700,
@@ -174,7 +164,7 @@ class _DashboardBody extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 4),
-          _sectionLabel('Quick Actions'),
+          _sectionLabel('Admin Actions'),
           const SizedBox(height: 12),
           _QuickActions(),
           const SizedBox(height: 24),
@@ -385,7 +375,6 @@ class _QuickActions extends StatelessWidget {
       _ActionItem(Icons.receipt_long_rounded, 'Expenses', '/expenses'),
       _ActionItem(Icons.payments_rounded, 'Payroll', '/payroll'),
       _ActionItem(Icons.bar_chart_rounded, 'Reports', '/reports'),
-      _ActionItem(Icons.settings_rounded, 'Settings', '/settings'),
     ];
 
     return GridView.count(
