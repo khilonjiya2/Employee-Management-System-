@@ -16,8 +16,8 @@ class MainShell extends ConsumerWidget {
   int _calculateIndex(String location, bool isAdmin) {
     final items = isAdmin
         ? [
-            '/dashboard',
             '/employees',
+            '/dashboard',
             '/supervisors',
           ]
         : [
@@ -33,7 +33,7 @@ class MainShell extends ConsumerWidget {
       }
     }
 
-    return 0;
+    return isAdmin ? 1 : 0;
   }
 
   @override
@@ -43,16 +43,16 @@ class MainShell extends ConsumerWidget {
 
     final adminItems = [
       const _NavItem(
-        icon: Icons.dashboard_outlined,
-        activeIcon: Icons.dashboard_rounded,
-        label: 'Dashboard',
-        path: '/dashboard',
-      ),
-      const _NavItem(
         icon: Icons.people_outline_rounded,
         activeIcon: Icons.people_rounded,
         label: 'Employees',
         path: '/employees',
+      ),
+      const _NavItem(
+        icon: Icons.dashboard_outlined,
+        activeIcon: Icons.dashboard_rounded,
+        label: 'Dashboard',
+        path: '/dashboard',
       ),
       const _NavItem(
         icon: Icons.supervisor_account_outlined,
