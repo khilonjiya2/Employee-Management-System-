@@ -372,11 +372,8 @@ class _SupervisorFormScreenState
                 readOnly: isEditing,
                 decoration: InputDecoration(
                   labelText: 'Username *',
-                  prefixIcon: const Icon(Icons.alternate_email_rounded),
-                  suffixText: '@ems.com',
-                  helperText: isEditing
-                      ? 'Username cannot be changed'
-                      : 'Login will be: USERNAME@ems.com',
+                  prefixIcon: const Icon(Icons.person_outline_rounded),
+                  helperText: isEditing ? 'Username cannot be changed' : null,
                 ),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) {
