@@ -19,134 +19,142 @@ class AdminDashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 160,
-            pinned: true,
-            backgroundColor: AppColors.primary600,
-            surfaceTintColor: Colors.transparent,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.primary700, AppColors.primary500],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+      appBar: AppBar(
+        title: const Text('Dashboard'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () => context.push('/notifications'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => context.push('/settings'),
+          ),
+        ],
+      ),
+      body: stats.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, stack) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Dashboard Error:',
+                    style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16)),
+                const SizedBox(height: 8),
+                Text(e.toString(),
+                    style: const TextStyle(color: Colors.red)),
+                const SizedBox(height: 8),
+                Text(
+                  stack.toString().substring(
+                      0, stack.toString().length > 500 ? 500 : stack.toString().length),
+                  style: const TextStyle(color: Colors.red, fontSize: 11),
                 ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                Icons.business_center_rounded,
+              ],
+            ),
+          ),
+        ),
+        data: (data) => RefreshIndicator(
+          onRefresh: () async => ref.invalidate(dashboardStatsProvider),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Welcome card matching supervisor style
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary700, AppColors.primary400],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary500.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Colors.white24,
+                        backgroundImage: profile?.profilePhotoUrl != null
+                            ? NetworkImage(profile!.profilePhotoUrl!)
+                            : null,
+                        child: profile?.profilePhotoUrl == null
+                            ? const Icon(
+                                Icons.admin_panel_settings_rounded,
                                 color: Colors.white,
-                                size: 22,
+                                size: 28,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Welcome back,',
+                              style: TextStyle(
+                                color: Color(0xCCFFFFFF),
+                                fontSize: 13,
+                                fontFamily: 'Inter',
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Welcome Admin',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w700,
-                                      fontFamily: 'Inter',
-                                    ),
-                                  ),
-                                ],
+                            Text(
+                              profile?.fullName ?? 'Admin',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Inter',
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-                              onPressed: () => context.push('/notifications'),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.settings_outlined, color: Colors.white),
-                              onPressed: () => context.push('/settings'),
+                            const SizedBox(height: 4),
+                            Text(
+                              DateFormat('EEEE, dd MMMM yyyy')
+                                  .format(DateTime.now()),
+                              style: const TextStyle(
+                                color: Color(0xCCFFFFFF),
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            DateFormat('EEEE, dd MMMM yyyy').format(DateTime.now()),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontFamily: 'Inter',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: stats.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (e, stack) => Padding(
-                padding: const EdgeInsets.all(16),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Dashboard Error:',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(e.toString(), style: const TextStyle(color: Colors.red)),
-                      const SizedBox(height: 8),
-                      Text(
-                        stack.toString().substring(0, 500),
-                        style: const TextStyle(color: Colors.red, fontSize: 11),
                       ),
                     ],
                   ),
                 ),
-              ),
-              data: (data) => _DashboardBody(stats: data),
+                const SizedBox(height: 20),
+                _DashboardBody(stats: data),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
