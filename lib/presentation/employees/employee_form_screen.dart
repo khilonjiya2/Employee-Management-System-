@@ -44,6 +44,10 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
   final _aadhaarController = TextEditingController();
   final _designationController = TextEditingController();
   final _wageController = TextEditingController();
+  final _upiController = TextEditingController();
+  final _bankAccountController = TextEditingController();
+  final _bankIfscController = TextEditingController();
+  final _bankNameController = TextEditingController();
 
   DateTime _joiningDate = DateTime.now();
   String? _departmentId;
@@ -52,6 +56,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
   File? _photoFile;
   String? _existingPhotoUrl;
   bool _isLoading = false;
+  bool _showBankDetails = false;
 
   bool get isEditing => widget.employeeId != null;
 
@@ -64,41 +69,44 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
   }
 
   Future<void> _loadEmployee() async {
-  final employee =
-      await ref.read(employeeRepositoryProvider).getById(
-            widget.employeeId!,
-          );
+    final employee =
+        await ref.read(employeeRepositoryProvider).getById(
+              widget.employeeId!,
+            );
 
-  if (employee == null || !mounted) return;
+    if (employee == null || !mounted) return;
 
-  _nameController.text = employee.name;
-  _mobileController.text = employee.mobile ?? '';
-  _addressController.text = employee.address ?? '';
-  _aadhaarController.text = employee.aadhaarNumber ?? '';
-  _designationController.text =
-      employee.designation ?? '';
-  _wageController.text =
-      employee.dailyWageRate.toString();
+    _nameController.text = employee.name;
+    _mobileController.text = employee.mobile ?? '';
+    _addressController.text = employee.address ?? '';
+    _aadhaarController.text = employee.aadhaarNumber ?? '';
+    _designationController.text = employee.designation ?? '';
+    _wageController.text = employee.dailyWageRate.toString();
+    _upiController.text = employee.upiId ?? '';
+    _bankAccountController.text = employee.bankAccountNumber ?? '';
+    _bankIfscController.text = employee.bankIfsc ?? '';
+    _bankNameController.text = employee.bankName ?? '';
 
-  _joiningDate = employee.joiningDate;
-  _departmentId = employee.departmentId;
-  _status = employee.status;
-  _existingPhotoUrl =
-      employee.employeePhotoUrl;
+    _joiningDate = employee.joiningDate;
+    _departmentId = employee.departmentId;
+    _status = employee.status;
+    _existingPhotoUrl = employee.employeePhotoUrl;
+    _showBankDetails = (employee.upiId?.isNotEmpty ?? false) ||
+        (employee.bankAccountNumber?.isNotEmpty ?? false);
 
-  final client = ref.read(supabaseProvider);
+    final client = ref.read(supabaseProvider);
 
-  final assignment = await client
-      .from('supervisor_employees')
-      .select('supervisor_id')
-      .eq('employee_id', employee.id)
-      .maybeSingle();
+    final assignment = await client
+        .from('supervisor_employees')
+        .select('supervisor_id')
+        .eq('employee_id', employee.id)
+        .maybeSingle();
 
-  _supervisorId =
-      assignment?['supervisor_id'] as String?;
+    _supervisorId = assignment?['supervisor_id'] as String?;
 
-  setState(() {});
-}
+    setState(() {});
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -107,6 +115,10 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
     _aadhaarController.dispose();
     _designationController.dispose();
     _wageController.dispose();
+    _upiController.dispose();
+    _bankAccountController.dispose();
+    _bankIfscController.dispose();
+    _bankNameController.dispose();
     super.dispose();
   }
 
@@ -133,6 +145,10 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
         'department_id': _departmentId,
         'supervisor_id': _supervisorId,
         'status': _status,
+        'upi_id': _upiController.text.trim().isEmpty ? null : _upiController.text.trim(),
+        'bank_account_number': _bankAccountController.text.trim().isEmpty ? null : _bankAccountController.text.trim(),
+        'bank_ifsc': _bankIfscController.text.trim().isEmpty ? null : _bankIfscController.text.trim().toUpperCase(),
+        'bank_name': _bankNameController.text.trim().isEmpty ? null : _bankNameController.text.trim(),
       };
 
       EmployeeModel employee;
@@ -166,11 +182,8 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final departments =
-    ref.watch(_departmentsProvider);
-
-final supervisors =
-    ref.watch(_supervisorsProvider);
+    final departments = ref.watch(_departmentsProvider);
+    final supervisors = ref.watch(_supervisorsProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -236,35 +249,31 @@ final supervisors =
                   ),
                 ),
                 const SizedBox(height: 16),
-
-supervisors.when(
-  loading: () => const LinearProgressIndicator(),
-  error: (_, __) => const SizedBox.shrink(),
-  data: (list) => DropdownButtonFormField<String>(
-    value: _supervisorId,
-    decoration: const InputDecoration(
-      labelText: 'Supervisor',
-      prefixIcon: Icon(Icons.supervisor_account_outlined),
-    ),
-    items: list
-        .map(
-          (s) => DropdownMenuItem<String>(
-            value: s.id,
-            child: Text(
-              '${s.name} (${s.supervisorCode})',
-            ),
-          ),
-        )
-        .toList(),
-    onChanged: (value) {
-      setState(() {
-        _supervisorId = value;
-      });
-    },
-  ),
-),
-
-const SizedBox(height: 16),
+                supervisors.when(
+                  loading: () => const LinearProgressIndicator(),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (list) => DropdownButtonFormField<String>(
+                    value: _supervisorId,
+                    decoration: const InputDecoration(
+                      labelText: 'Supervisor',
+                      prefixIcon: Icon(Icons.supervisor_account_outlined),
+                    ),
+                    items: list
+                        .map(
+                          (s) => DropdownMenuItem<String>(
+                            value: s.id,
+                            child: Text('${s.name} (${s.supervisorCode})'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _supervisorId = value;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _designationController,
                   decoration: const InputDecoration(labelText: 'Designation', prefixIcon: Icon(Icons.work_outline)),
@@ -287,6 +296,70 @@ const SizedBox(height: 16),
                   onChanged: (v) => setState(() => _status = v ?? 'active'),
                 ),
               ]),
+              const SizedBox(height: 20),
+              InkWell(
+                onTap: () => setState(() => _showBankDetails = !_showBankDetails),
+                child: Row(
+                  children: [
+                    Text(
+                      'Payment Details',
+                      style: theme.textTheme.titleMedium?.copyWith(color: AppColors.primary500),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      _showBankDetails ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                      color: AppColors.primary500,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Required for paying salary via UPI',
+                style: theme.textTheme.bodySmall?.copyWith(color: AppColors.secondary400),
+              ),
+              if (_showBankDetails) ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _upiController,
+                  decoration: const InputDecoration(
+                    labelText: 'UPI ID',
+                    hintText: 'name@bankupi',
+                    prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    if (!v.contains('@')) return 'Enter a valid UPI ID (e.g. name@bank)';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _bankAccountController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Bank Account Number',
+                    prefixIcon: Icon(Icons.account_balance_outlined),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _bankIfscController,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'IFSC Code',
+                    prefixIcon: Icon(Icons.pin_outlined),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _bankNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Bank Name',
+                    prefixIcon: Icon(Icons.business_outlined),
+                  ),
+                ),
+              ],
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: _isLoading ? null : _save,
@@ -452,6 +525,18 @@ class _EmployeeDetailBody extends ConsumerWidget {
               _DetailRow(icon: Icons.currency_rupee_rounded, label: 'Daily Wage', value: '₹${employee.dailyWageRate.toStringAsFixed(2)}'),
             ],
           ),
+          if (employee.hasUpi || employee.bankAccountNumber != null) ...[
+            const SizedBox(height: 12),
+            _DetailCard(
+              title: 'Payment Details',
+              rows: [
+                if (employee.hasUpi) _DetailRow(icon: Icons.account_balance_wallet_outlined, label: 'UPI ID', value: employee.upiId!),
+                if (employee.bankAccountNumber != null) _DetailRow(icon: Icons.account_balance_outlined, label: 'Account No.', value: employee.bankAccountNumber!),
+                if (employee.bankIfsc != null) _DetailRow(icon: Icons.pin_outlined, label: 'IFSC', value: employee.bankIfsc!),
+                if (employee.bankName != null) _DetailRow(icon: Icons.business_outlined, label: 'Bank', value: employee.bankName!),
+              ],
+            ),
+          ],
           if (employee.aadhaarNumber != null) ...[
             const SizedBox(height: 12),
             _DetailCard(
@@ -575,4 +660,3 @@ class _DetailRow {
     );
   }
 }
-
