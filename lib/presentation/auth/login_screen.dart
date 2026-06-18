@@ -58,7 +58,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ref.read(loginLoadingProvider.notifier).state = false;
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(loginLoadingProvider);
