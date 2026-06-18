@@ -42,12 +42,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await auth.signInWithEmail(email, _passwordController.text);
 
       ref.invalidate(currentProfileProvider);
-      final profile = await ref.refresh(currentProfileProvider.future);
+      final profile = await ref.read(currentProfileProvider.future);
 
       if (!mounted) return;
 
-      if (profile?.mustChangePassword == true) {
+      if (profile == null) {
+        ref.read(loginErrorProvider.notifier).state =
+            'Could not load your profile. Please try again.';
+        return;
+      }
+
+      if (!profile.isActive) {
+        ref.read(loginErrorProvider.notifier).state =
+            'Your account has been deactivated. Contact your administrator.';
+        await auth.signOut();
+        return;
+      }
+
+      // must_change_password takes priority over role-based routing,
+      // regardless of role (admin/supervisor/employee).
+      if (profile.mustChangePassword == true) {
         context.go('/change-password');
+        return;
+      }
+
+      // Role-based landing route. Employee gets its own dashboard route;
+      // admin/supervisor both land on /dashboard which internally branches
+      // via DashboardRouterWidget.
+      if (profile.isEmployee) {
+        context.go('/dashboard');
       } else {
         context.go('/dashboard');
       }
