@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:photo_view/photo_view.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -82,6 +81,15 @@ class _ExpensesListScreenState extends ConsumerState<ExpensesListScreen> with Si
       appBar: AppBar(
         title: const Text('Expenses'),
         actions: [
+          if (profile?.isAdmin == true)
+            IconButton(
+              icon: const Icon(Icons.groups_rounded),
+              tooltip: 'View by Supervisor',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ExpenseSupervisorDrilldownScreen()),
+              ),
+            ),
           if (profile?.isSupervisor == true)
             IconButton(icon: const Icon(Icons.add_rounded), onPressed: () => context.push('/expenses/new')),
         ],
@@ -196,6 +204,10 @@ class _ExpenseCard extends ConsumerWidget {
                 Text(CurrencyUtils.format(expense.amount), style: theme.textTheme.titleMedium?.copyWith(color: AppColors.primary600)),
                 const SizedBox(height: 4),
                 w.StatusBadge(status: expense.status),
+                if (expense.isApproved) ...[
+                  const SizedBox(height: 2),
+                  w.StatusBadge(status: expense.isPaid ? 'paid' : 'unpaid'),
+                ],
               ],
             ),
           ],
@@ -300,29 +312,28 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       }
 
       if (_receipt != null) {
-  final bytes = await _receipt!.readAsBytes();
-  final ext = _receipt!.path.split('.').last.toLowerCase();
+        final bytes = await _receipt!.readAsBytes();
+        final ext = _receipt!.path.split('.').last.toLowerCase();
 
-  String mimeType;
+        String mimeType;
+        if (ext == 'jpg' || ext == 'jpeg') {
+          mimeType = 'image/jpeg';
+        } else if (ext == 'png') {
+          mimeType = 'image/png';
+        } else if (ext == 'pdf') {
+          mimeType = 'application/pdf';
+        } else {
+          mimeType = 'application/octet-stream';
+        }
 
-  if (ext == 'jpg' || ext == 'jpeg') {
-    mimeType = 'image/jpeg';
-  } else if (ext == 'png') {
-    mimeType = 'image/png';
-  } else if (ext == 'pdf') {
-    mimeType = 'application/pdf';
-  } else {
-    mimeType = 'application/octet-stream';
-  }
-
-  await repo.uploadAttachment(
-    expense.id,
-    bytes,
-    'receipt.$ext',
-    mimeType,
-    isReceipt: true,
-  );
-}
+        await repo.uploadAttachment(
+          expense.id,
+          bytes,
+          'receipt.$ext',
+          mimeType,
+          isReceipt: true,
+        );
+      }
 
       for (final att in _attachments) {
         final bytes = await att.readAsBytes();
@@ -503,7 +514,6 @@ class ExpenseDetailScreen extends ConsumerWidget {
 
         final profile = ref.watch(currentProfileProvider).valueOrNull;
         final isAdmin = profile?.isAdmin == true;
-        final isSupervisorOwner = exp.supervisorId == ref.watch(currentProfileProvider).valueOrNull?.id;
 
         return Scaffold(
           appBar: AppBar(
@@ -532,6 +542,14 @@ class ExpenseDetailScreen extends ConsumerWidget {
                 if (isAdmin && exp.isPending) ...[
                   const SizedBox(height: 24),
                   _buildAdminActions(context, ref, exp),
+                ],
+                if (isAdmin && exp.canPay) ...[
+                  const SizedBox(height: 24),
+                  _buildPayButton(context, ref, exp),
+                ],
+                if (exp.isPaid) ...[
+                  const SizedBox(height: 16),
+                  _buildPaidBanner(context, exp),
                 ],
               ],
             ),
@@ -595,96 +613,73 @@ class ExpenseDetailScreen extends ConsumerWidget {
           if (exp.description != null) _Row(label: 'Description', value: exp.description!),
           _Row(label: 'Submitted', value: DateFormat('dd/MM/yyyy HH:mm').format(exp.createdAt)),
           if (exp.reviewedAt != null) _Row(label: 'Reviewed', value: DateFormat('dd/MM/yyyy HH:mm').format(exp.reviewedAt!)),
+          if (exp.utrReference != null) _Row(label: 'UTR Reference', value: exp.utrReference!),
         ],
       ),
     );
   }
 
   Widget _buildAttachments(BuildContext context, ExpenseModel exp) {
-  final theme = Theme.of(context);
+    final theme = Theme.of(context);
 
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        'Attachments',
-        style: theme.textTheme.titleMedium,
-      ),
-      const SizedBox(height: 8),
-
-      ...exp.attachments!.map(
-        (att) => InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AttachmentViewerScreen(
-                  fileUrl: att.fileUrl!,
-                  fileName: att.fileName ?? 'Attachment',
-                  isPdf: att.isPdf,
-                ),
-              ),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: AppColors.secondary200,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  att.isPdf
-                      ? Icons.picture_as_pdf_rounded
-                      : Icons.image_outlined,
-                  color: AppColors.primary500,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-
-                Expanded(
-                  child: Text(
-                    att.fileName ?? 'Attachment',
-                    overflow: TextOverflow.ellipsis,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Attachments', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        ...exp.attachments!.map(
+          (att) => InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AttachmentViewerScreen(
+                    fileUrl: att.fileUrl,
+                    fileName: att.fileName ?? 'Attachment',
+                    isPdf: att.isPdf,
                   ),
                 ),
-
-                const Icon(
-                  Icons.visibility_rounded,
-                ),
-
-                if (att.isReceipt)
-                  Container(
-                    margin: const EdgeInsets.only(left: 8),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.success100,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'Receipt',
-                      style: TextStyle(
-                        color: AppColors.success700,
-                        fontSize: 10,
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.secondary200),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    att.isPdf ? Icons.picture_as_pdf_rounded : Icons.image_outlined,
+                    color: AppColors.primary500,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(att.fileName ?? 'Attachment', overflow: TextOverflow.ellipsis),
+                  ),
+                  const Icon(Icons.visibility_rounded),
+                  if (att.isReceipt)
+                    Container(
+                      margin: const EdgeInsets.only(left: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.success100,
+                        borderRadius: BorderRadius.circular(4),
                       ),
+                      child: const Text('Receipt', style: TextStyle(color: AppColors.success700, fontSize: 10)),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
+
   Widget _buildAdminRemarks(BuildContext context, ExpenseModel exp) {
     final theme = Theme.of(context);
     return Container(
@@ -692,12 +687,8 @@ class ExpenseDetailScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: exp.isRejected ? AppColors.error50 : AppColors.success50,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-  color: exp.isRejected
-      ? AppColors.error100
-      : AppColors.success100,
-),
-),
+        border: Border.all(color: exp.isRejected ? AppColors.error100 : AppColors.success100),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -709,10 +700,44 @@ class ExpenseDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildAdminActions(BuildContext context, WidgetRef ref, ExpenseModel exp) {
-    final _remarksController = TextEditingController();
+  Widget _buildPaidBanner(BuildContext context, ExpenseModel exp) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.success50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.success100),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle_rounded, color: AppColors.success600),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              exp.utrReference != null
+                  ? 'Paid via UPI · UTR: ${exp.utrReference}'
+                  : 'Paid via UPI',
+              style: const TextStyle(color: AppColors.success700, fontFamily: 'Inter', fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    Future<void> _handleAction(bool approve) async {
+  Widget _buildPayButton(BuildContext context, WidgetRef ref, ExpenseModel exp) {
+    return ElevatedButton.icon(
+      icon: const Icon(Icons.account_balance_wallet_rounded, size: 18),
+      label: Text('Pay ${CurrencyUtils.format(exp.amount)} via UPI'),
+      style: ElevatedButton.styleFrom(backgroundColor: AppColors.success500),
+      onPressed: () => w.UpiPaymentHelper.payExpense(context, ref, exp),
+    );
+  }
+
+  Widget _buildAdminActions(BuildContext context, WidgetRef ref, ExpenseModel exp) {
+    final remarksController = TextEditingController();
+
+    Future<void> handleAction(bool approve) async {
       String? remarks;
       if (!approve) {
         final result = await showDialog<String>(
@@ -720,14 +745,14 @@ class ExpenseDetailScreen extends ConsumerWidget {
           builder: (_) => AlertDialog(
             title: const Text('Rejection Reason'),
             content: TextField(
-              controller: _remarksController,
+              controller: remarksController,
               decoration: const InputDecoration(hintText: 'Enter reason for rejection...'),
               maxLines: 3,
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
               FilledButton(
-                onPressed: () => Navigator.pop(context, _remarksController.text.trim()),
+                onPressed: () => Navigator.pop(context, remarksController.text.trim()),
                 style: FilledButton.styleFrom(backgroundColor: AppColors.error500),
                 child: const Text('Reject'),
               ),
@@ -772,7 +797,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
             icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.error500),
             label: const Text('Reject', style: TextStyle(color: AppColors.error500)),
             style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.error500)),
-            onPressed: () => _handleAction(false),
+            onPressed: () => handleAction(false),
           ),
         ),
         const SizedBox(width: 12),
@@ -781,7 +806,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
             icon: const Icon(Icons.check_rounded, size: 18),
             label: const Text('Approve'),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.success500),
-            onPressed: () => _handleAction(true),
+            onPressed: () => handleAction(true),
           ),
         ),
       ],
@@ -809,8 +834,7 @@ class _Row extends StatelessWidget {
   }
 }
 
-
-class AttachmentViewerScreen extends StatelessWidget {
+class AttachmentViewerScreen extends StatefulWidget {
   final String fileUrl;
   final String fileName;
   final bool isPdf;
@@ -823,31 +847,59 @@ class AttachmentViewerScreen extends StatelessWidget {
   });
 
   @override
+  State<AttachmentViewerScreen> createState() => _AttachmentViewerScreenState();
+}
+
+class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
+  late String _cacheBustedUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    // Cache-bust the URL so a previously-failed (e.g. 403 before the bucket
+    // was made public) cached response doesn't keep showing as broken even
+    // after the storage policy is fixed. This addresses bug #7's secondary
+    // cause: Flutter's image cache holding onto the old failed request.
+    final separator = widget.fileUrl.contains('?') ? '&' : '?';
+    _cacheBustedUrl = '${widget.fileUrl}${separator}t=${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  Future<void> _retry() async {
+    setState(() {
+      final separator = widget.fileUrl.contains('?') ? '&' : '?';
+      _cacheBustedUrl = '${widget.fileUrl}${separator}t=${DateTime.now().millisecondsSinceEpoch}';
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(fileName,
-            style: const TextStyle(color: Colors.white, fontSize: 14)),
+        title: Text(widget.fileName, style: const TextStyle(color: Colors.white, fontSize: 14)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            onPressed: _retry,
+          ),
           IconButton(
             icon: const Icon(Icons.share_rounded, color: Colors.white),
             onPressed: () async {
-              await Share.shareUri(Uri.parse(fileUrl));
+              await Share.shareUri(Uri.parse(widget.fileUrl));
             },
           ),
         ],
       ),
-      body: isPdf
-          ? SfPdfViewer.network(fileUrl)
+      body: widget.isPdf
+          ? SfPdfViewer.network(widget.fileUrl)
           : InteractiveViewer(
               minScale: 0.5,
               maxScale: 4.0,
               child: Center(
                 child: Image.network(
-                  fileUrl,
+                  _cacheBustedUrl,
                   fit: BoxFit.contain,
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
@@ -858,24 +910,321 @@ class AttachmentViewerScreen extends StatelessWidget {
                   errorBuilder: (context, error, stack) => Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.broken_image_rounded,
-                          color: Colors.white54, size: 64),
+                      const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 64),
                       const SizedBox(height: 16),
-                      const Text('Could not load image',
-                          style: TextStyle(color: Colors.white54)),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () async {
-                          await Share.shareUri(Uri.parse(fileUrl));
-                        },
-                        child: const Text('Open in browser',
-                            style: TextStyle(color: Colors.white70)),
+                      const Text('Could not load image', style: TextStyle(color: Colors.white54)),
+                      const SizedBox(height: 4),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          'If this persists, confirm the storage bucket is set to Public in Supabase Dashboard → Storage.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white38, fontSize: 11),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          TextButton(
+                            onPressed: _retry,
+                            child: const Text('Retry', style: TextStyle(color: Colors.white70)),
+                          ),
+                          const SizedBox(width: 16),
+                          TextButton(
+                            onPressed: () async {
+                              await Share.shareUri(Uri.parse(widget.fileUrl));
+                            },
+                            child: const Text('Open in browser', style: TextStyle(color: Colors.white70)),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// ─────────────────────── SUPERVISOR → MONTH DRILLDOWN (bug #9) ───────────────────────
+
+class ExpenseSupervisorDrilldownScreen extends ConsumerStatefulWidget {
+  const ExpenseSupervisorDrilldownScreen({super.key});
+
+  @override
+  ConsumerState<ExpenseSupervisorDrilldownScreen> createState() => _ExpenseSupervisorDrilldownScreenState();
+}
+
+class _ExpenseSupervisorDrilldownScreenState extends ConsumerState<ExpenseSupervisorDrilldownScreen> {
+  Future<Map<String, List<ExpenseModel>>>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ref.read(expenseRepositoryProvider).getGroupedBySupervisor();
+  }
+
+  Future<void> _refresh() async {
+    final future = ref.read(expenseRepositoryProvider).getGroupedBySupervisor();
+    setState(() => _future = future);
+    await future;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Expenses by Supervisor')),
+      body: FutureBuilder<Map<String, List<ExpenseModel>>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          final grouped = snapshot.data!;
+          if (grouped.isEmpty) {
+            return const w.EmptyState(title: 'No expenses found', icon: Icons.groups_outlined);
+          }
+
+          final entries = grouped.entries.toList();
+
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: entries.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (_, i) {
+                final supervisorId = entries[i].key;
+                final expenses = entries[i].value;
+                final supervisorName = expenses.first.supervisorName ?? 'Supervisor';
+                final total = expenses.fold<double>(0, (s, e) => s + e.amount);
+                final pendingCount = expenses.where((e) => e.isPending).length;
+
+                return InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ExpenseMonthDrilldownScreen(
+                        supervisorId: supervisorId,
+                        supervisorName: supervisorName,
+                        allExpenses: expenses,
+                      ),
+                    ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.secondary200),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 22,
+                          backgroundColor: AppColors.accent100,
+                          child: Text(
+                            supervisorName.isNotEmpty ? supervisorName[0].toUpperCase() : '?',
+                            style: const TextStyle(color: AppColors.accent600, fontWeight: FontWeight.w700, fontFamily: 'Inter'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(supervisorName, style: Theme.of(context).textTheme.titleMedium),
+                              Text('${expenses.length} expenses${pendingCount > 0 ? " · $pendingCount pending" : ""}',
+                                  style: Theme.of(context).textTheme.bodySmall),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(CurrencyUtils.format(total),
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.primary600)),
+                            const Icon(Icons.chevron_right_rounded, color: AppColors.secondary400, size: 18),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class ExpenseMonthDrilldownScreen extends StatelessWidget {
+  final String supervisorId;
+  final String supervisorName;
+  final List<ExpenseModel> allExpenses;
+
+  const ExpenseMonthDrilldownScreen({
+    super.key,
+    required this.supervisorId,
+    required this.supervisorName,
+    required this.allExpenses,
+  });
+
+  Map<String, List<ExpenseModel>> _groupByMonth() {
+    final grouped = <String, List<ExpenseModel>>{};
+    for (final exp in allExpenses) {
+      final key = DateFormat('yyyy-MM').format(exp.expenseDate);
+      grouped.putIfAbsent(key, () => []).add(exp);
+    }
+    // Sort keys descending (most recent month first)
+    final sortedKeys = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+    return {for (final k in sortedKeys) k: grouped[k]!};
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final grouped = _groupByMonth();
+
+    return Scaffold(
+      appBar: AppBar(title: Text(supervisorName)),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: grouped.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, i) {
+          final monthKey = grouped.keys.elementAt(i);
+          final monthExpenses = grouped[monthKey]!;
+          final monthDate = DateFormat('yyyy-MM').parse(monthKey);
+          final monthLabel = DateFormat('MMMM yyyy').format(monthDate);
+          final total = monthExpenses.fold<double>(0, (s, e) => s + e.amount);
+
+          return InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ExpenseMonthListScreen(
+                  monthLabel: monthLabel,
+                  expenses: monthExpenses,
+                ),
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.secondary200),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary50,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.calendar_month_rounded, color: AppColors.primary500, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(monthLabel, style: Theme.of(context).textTheme.titleMedium),
+                        Text('${monthExpenses.length} expenses', style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                  Text(CurrencyUtils.format(total),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.primary600)),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right_rounded, color: AppColors.secondary400, size: 18),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class ExpenseMonthListScreen extends StatelessWidget {
+  final String monthLabel;
+  final List<ExpenseModel> expenses;
+
+  const ExpenseMonthListScreen({super.key, required this.monthLabel, required this.expenses});
+
+  @override
+  Widget build(BuildContext context) {
+    final total = expenses.fold<double>(0, (s, e) => s + e.amount);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(monthLabel)),
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            color: AppColors.primary50,
+            child: Text(
+              'Total: ${CurrencyUtils.format(total)}',
+              style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary600, fontFamily: 'Inter', fontSize: 16),
+            ),
+          ),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: expenses.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (_, i) {
+                final exp = expenses[i];
+                return InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => context.push('/expenses/${exp.id}'),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.secondary200),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(exp.expenseName, style: Theme.of(context).textTheme.titleSmall),
+                              Text(
+                                '${StringUtils.capitalize(exp.category)} • ${DateFormat('dd/MM/yyyy').format(exp.expenseDate)}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(CurrencyUtils.format(exp.amount),
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(color: AppColors.primary600)),
+                            w.StatusBadge(status: exp.status),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
