@@ -22,6 +22,7 @@ class _ForcePasswordChangeScreenState
   bool _obscureNew = true;
   bool _obscureConfirm = true;
   bool _isLoading = false;
+  bool _completed = false; // guard against double-trigger/double-navigation
 
   @override
   void dispose() {
@@ -31,6 +32,7 @@ class _ForcePasswordChangeScreenState
   }
 
   Future<void> _save() async {
+    if (_completed) return; // guard: prevent re-entry if already done
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
@@ -47,9 +49,20 @@ class _ForcePasswordChangeScreenState
             .update({'must_change_password': false}).eq('id', user.id);
       }
 
+      // Mark as completed BEFORE touching the provider, so any redirect
+      // re-evaluation during the refresh window doesn't re-show this screen.
+      _completed = true;
+
+      // Invalidate and AWAIT the new profile value before navigating.
+      // This is the critical fix: previously context.go() fired while the
+      // provider was still resolving, so the router's redirect logic read
+      // the stale (mustChangePassword: true) profile and bounced back here.
       ref.invalidate(currentProfileProvider);
+      await ref.read(currentProfileProvider.future);
+
       if (mounted) context.go('/dashboard');
     } catch (e) {
+      _completed = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
