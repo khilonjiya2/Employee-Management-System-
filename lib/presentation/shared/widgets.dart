@@ -355,8 +355,9 @@ class UpiPaymentHelper {
     final upiId = sup?['upi_id'] as String?;
     final name = sup?['name'] as String? ?? expense.supervisorName ?? 'Supervisor';
 
+    if (!context.mounted) return;
     if (upiId == null || upiId.trim().isEmpty) {
-      if (context.mounted) _showNoUpiDialog(context, name);
+      _showNoUpiDialog(context, name);
       return;
     }
 
@@ -400,8 +401,9 @@ class UpiPaymentHelper {
     final upiId = emp?['upi_id'] as String?;
     final name = emp?['name'] as String? ?? payroll.employeeName ?? 'Employee';
 
+    if (!context.mounted) return;
     if (upiId == null || upiId.trim().isEmpty) {
-      if (context.mounted) _showNoUpiDialog(context, name);
+      _showNoUpiDialog(context, name);
       return;
     }
 
@@ -411,8 +413,7 @@ class UpiPaymentHelper {
       payeeName: name,
       upiId: upiId,
       amount: payroll.netWage,
-      referenceNote:
-          'Salary ${payroll.payrollMonth}-${payroll.payrollYear}',
+      referenceNote: 'Salary ${payroll.payrollMonth}-${payroll.payrollYear}',
       onConfirmed: (utr) async {
         await ref.read(payrollRepositoryProvider).confirmPayment(
               payroll.id,
@@ -431,15 +432,16 @@ class UpiPaymentHelper {
     );
   }
 
-static Future<void> paySupervisorSalary(
+  static Future<void> paySupervisorSalary(
     BuildContext context,
     WidgetRef ref,
     SupervisorPayrollModel record,
     SupervisorModel supervisor,
   ) async {
     final upiId = supervisor.upiId;
+    if (!context.mounted) return;
     if (upiId == null || upiId.trim().isEmpty) {
-      if (context.mounted) _showNoUpiDialog(context, supervisor.name);
+      _showNoUpiDialog(context, supervisor.name);
       return;
     }
 
@@ -449,14 +451,13 @@ static Future<void> paySupervisorSalary(
       payeeName: supervisor.name,
       upiId: upiId,
       amount: record.netAmount,
-      referenceNote:
-          'Salary ${record.payrollMonth}-${record.payrollYear}',
+      referenceNote: 'Salary ${record.payrollMonth}-${record.payrollYear}',
       onConfirmed: (utr) async {
         await ref
             .read(supervisorPayrollRepositoryProvider)
             .confirmPayment(record.id, utrReference: utr);
         await ref.read(paymentRepositoryProvider).logPayment(
-              referenceType: 'expense', // use expense type for supervisor
+              referenceType: 'expense',
               referenceId: record.id,
               supervisorId: record.supervisorId,
               amount: record.netAmount,
@@ -472,14 +473,14 @@ static Future<void> paySupervisorSalary(
   static void _showNoUpiDialog(BuildContext context, String name) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('No UPI ID on file'),
         content: Text(
           '$name does not have a UPI ID saved. Add one in their profile before paying via UPI.',
         ),
         actions: [
           FilledButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),
           ),
         ],
@@ -503,10 +504,15 @@ static Future<void> paySupervisorSalary(
           referenceNote: referenceNote,
         );
 
-    final launched = await launchUrl(
-      Uri.parse(uri),
-      mode: LaunchMode.externalApplication,
-    );
+    bool launched = false;
+    try {
+      launched = await launchUrl(
+        Uri.parse(uri),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      launched = false;
+    }
 
     if (!launched) {
       if (context.mounted) {
@@ -522,30 +528,34 @@ static Future<void> paySupervisorSalary(
 
     if (!context.mounted) return;
 
-    // Ask the admin to confirm the payment after returning from the UPI app.
-    // The result is delivered via a callback that explicitly closes the
-    // dialog using its OWN context (dialogContext), never the outer screen
-    // context — this is the same fix pattern used for the Manage Locations
-    // bug: relying on an ambient/implicit context for Navigator.pop is
-    // fragile and can silently fail to close the correct route.
-    String? confirmedUtr;
+    // Small delay so UPI app has time to open before we show the dialog
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (!context.mounted) return;
+
     bool wasConfirmed = false;
+    String? confirmedUtr;
 
     await showDialog<void>(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => _PaymentConfirmDialog(
-        payeeName: payeeName,
-        amount: amount,
-        onResult: (confirmed, utr) {
-          wasConfirmed = confirmed;
-          confirmedUtr = utr;
-          Navigator.of(dialogContext).pop();
-        },
+      barrierDismissible: false,  // MUST not close on outside tap
+      useRootNavigator: true,     // Use root navigator to avoid shell route issues
+      builder: (dialogContext) => PopScope(
+        canPop: false,            // Prevent back button dismissal
+        child: _PaymentConfirmDialog(
+          payeeName: payeeName,
+          amount: amount,
+          onResult: (confirmed, utr) {
+            wasConfirmed = confirmed;
+            confirmedUtr = utr;
+            Navigator.of(dialogContext, rootNavigator: true).pop();
+          },
+        ),
       ),
     );
 
     if (!wasConfirmed) return;
+    if (!context.mounted) return;
 
     final utr = confirmedUtr?.trim();
     try {
@@ -553,7 +563,7 @@ static Future<void> paySupervisorSalary(
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Payment recorded'),
+            content: Text('Payment recorded successfully'),
             backgroundColor: AppColors.success500,
           ),
         );
@@ -561,7 +571,9 @@ static Future<void> paySupervisorSalary(
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error recording payment: $e'), backgroundColor: AppColors.error500),
+          SnackBar(
+              content: Text('Error recording payment: $e'),
+              backgroundColor: AppColors.error500),
         );
       }
     }
@@ -600,7 +612,9 @@ class _PaymentConfirmDialogState extends State<_PaymentConfirmDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Did the UPI payment of Rs.${widget.amount.toStringAsFixed(2)} to ${widget.payeeName} go through?'),
+          Text(
+            'Did the UPI payment of ₹${widget.amount.toStringAsFixed(2)} to ${widget.payeeName} go through?',
+          ),
           const SizedBox(height: 16),
           TextField(
             controller: _utrController,
@@ -625,3 +639,4 @@ class _PaymentConfirmDialogState extends State<_PaymentConfirmDialog> {
     );
   }
 }
+
