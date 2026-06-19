@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../shared/widgets.dart' as w;
+import '../../data/models/app_models.dart';
 
 
 final _unreadNotificationCountProvider =
