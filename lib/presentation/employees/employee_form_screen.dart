@@ -695,7 +695,7 @@ class _EmployeeDetailBodyState extends ConsumerState<_EmployeeDetailBody> {
                             size: 10,
                             color: hasLogin
                                 ? AppColors.success700
-                                : AppColors.accent700,
+                                : AppColors.accent600,
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -706,7 +706,7 @@ class _EmployeeDetailBodyState extends ConsumerState<_EmployeeDetailBody> {
                               fontFamily: 'Inter',
                               color: hasLogin
                                   ? AppColors.success700
-                                  : AppColors.accent700,
+                                  : AppColors.accent600,
                             ),
                           ),
                         ],
@@ -741,7 +741,7 @@ class _EmployeeDetailBodyState extends ConsumerState<_EmployeeDetailBody> {
                         'No app login created yet',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppColors.accent700,
+                          color: AppColors.accent600,
                           fontFamily: 'Inter',
                         ),
                       ),
