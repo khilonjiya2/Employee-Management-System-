@@ -252,6 +252,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onTap: () => _showManageLocations(context, ref),
             ),
           ],
+ListTile(
+              leading: const Icon(Icons.payment_outlined),
+              title: const Text('Payment Module'),
+              subtitle: const Text('Enable/disable UPI payment feature'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => _showPaymentModuleSettings(context, ref),
+            ),
 
           // About
           _SectionTitle(title: 'About'),
@@ -279,6 +286,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 32),
         ],
       ),
+    );
+  }
+
+void _showPaymentModuleSettings(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _PaymentModuleSheet(ref: ref),
     );
   }
 
@@ -631,6 +648,76 @@ class _SectionTitle extends StatelessWidget {
             .textTheme
             .labelLarge
             ?.copyWith(color: AppColors.primary500),
+      ),
+    );
+  }
+}
+
+
+class _PaymentModuleSheet extends StatefulWidget {
+  final WidgetRef ref;
+  const _PaymentModuleSheet({required this.ref});
+
+  @override
+  State<_PaymentModuleSheet> createState() => _PaymentModuleSheetState();
+}
+
+class _PaymentModuleSheetState extends State<_PaymentModuleSheet> {
+  bool? _enabled;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _enabled = widget.ref.read(paymentModuleEnabledProvider);
+  }
+
+  Future<void> _toggle(bool value) async {
+    setState(() { _enabled = value; _isSaving = true; });
+    try {
+      final profile = widget.ref.read(currentProfileProvider).valueOrNull;
+      if (profile?.companyId == null) return;
+      await widget.ref.read(supabaseProvider)
+          .from('companies')
+          .update({'payment_module_enabled': value})
+          .eq('id', profile!.companyId!);
+      widget.ref.invalidate(companyProvider);
+    } catch (e) {
+      setState(() => _enabled = !value); // revert
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error500));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Payment Module', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          const Text(
+            'When enabled, admins can pay employee salaries and supervisor expenses directly via UPI from within the app.',
+          ),
+          const SizedBox(height: 24),
+          SwitchListTile(
+            title: const Text('UPI Payment Module'),
+            subtitle: Text(_enabled == true
+                ? 'Pay via UPI is active for this company'
+                : 'Only Mark as Paid is available'),
+            value: _enabled ?? false,
+            onChanged: _isSaving ? null : _toggle,
+            activeColor: AppColors.success500,
+          ),
+          const SizedBox(height: 24),
+        ],
       ),
     );
   }
