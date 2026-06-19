@@ -9,6 +9,7 @@ import '../../core/utils/app_utils.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../shared/widgets.dart' as w;
 
+
 final _unreadNotificationCountProvider =
     FutureProvider.autoDispose<int>((ref) async {
   return ref.read(notificationRepositoryProvider).getUnreadCount();
@@ -781,6 +782,22 @@ class _SupervisorDashboardScreenState
                       ),
                     ],
                   ),
+const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.receipt_outlined, size: 18),
+                      label: const Text('My Payslips'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary600,
+                        side: const BorderSide(color: AppColors.primary400),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => _showMyPayslips(context),
+                    ),
+                  ),
 
                   const SizedBox(height: 100),
                 ],
@@ -788,6 +805,17 @@ class _SupervisorDashboardScreenState
             ),
           );
         },
+      ),
+    );
+  }
+
+void _showMyPayslips(BuildContext context) {
+    final profileId = ref.read(currentProfileProvider).valueOrNull?.id;
+    if (profileId == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _SupervisorPayslipsScreen(profileId: profileId),
       ),
     );
   }
@@ -866,3 +894,122 @@ class _SupervisorDashboardScreenState
     };
   }
 }
+
+
+class _SupervisorPayslipsScreen extends ConsumerWidget {
+  final String profileId;
+  const _SupervisorPayslipsScreen({required this.profileId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('My Payslips')),
+      body: FutureBuilder(
+        future: ref.read(supabaseProvider)
+            .from('supervisors')
+            .select('id, monthly_salary')
+            .eq('profile_id', profileId)
+            .maybeSingle(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final sup = snapshot.data as Map<String, dynamic>?;
+          if (sup == null) {
+            return const w.EmptyState(
+              title: 'No supervisor record found',
+              icon: Icons.person_off_outlined,
+            );
+          }
+          final supervisorId = sup['id'] as String;
+          return _PayslipList(supervisorId: supervisorId);
+        },
+      ),
+    );
+  }
+}
+
+class _PayslipList extends ConsumerWidget {
+  final String supervisorId;
+  const _PayslipList({required this.supervisorId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final payrollAsync = ref.watch(
+        _supervisorPayslipProvider(supervisorId));
+
+    return payrollAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Error: $e')),
+      data: (list) {
+        if (list.isEmpty) {
+          return const w.EmptyState(
+            title: 'No payslips yet',
+            subtitle: 'Your admin will process your monthly salary here',
+            icon: Icons.payments_outlined,
+          );
+        }
+        return RefreshIndicator(
+          onRefresh: () async =>
+              ref.invalidate(_supervisorPayslipProvider(supervisorId)),
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: list.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (_, i) {
+              final p = list[i];
+              final monthName = DateFormat('MMMM yyyy')
+                  .format(DateTime(p.payrollYear, p.payrollMonth));
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.secondary200),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(monthName,
+                              style: Theme.of(context).textTheme.titleMedium),
+                          Text(
+                              'Base: ${CurrencyUtils.format(p.monthlySalary)}'
+                              '  Bonus: ${CurrencyUtils.format(p.bonus)}'
+                              '  Ded: ${CurrencyUtils.format(p.deduction)}',
+                              style: Theme.of(context).textTheme.bodySmall),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(CurrencyUtils.format(p.netAmount),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(color: AppColors.primary600)),
+                        const SizedBox(height: 4),
+                        w.StatusBadge(
+                            status: p.isPaid ? 'paid' : p.status),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+final _supervisorPayslipProvider = FutureProvider.autoDispose
+    .family<List<SupervisorPayrollModel>, String>((ref, supervisorId) {
+  return ref
+      .read(supervisorPayrollRepositoryProvider)
+      .getForSupervisor(supervisorId);
+});
