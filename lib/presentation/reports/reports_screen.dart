@@ -609,12 +609,12 @@ class _ExpenseReportState extends ConsumerState<_ExpenseReport> {
               'Period: ${DateFormat('dd/MM/yyyy').format(_fromDate)} - ${DateFormat('dd/MM/yyyy').format(_toDate)}'),
           pw.SizedBox(height: 8),
           pw.Row(children: [
-            pw.Text('Total: ₹${totalAmount.toStringAsFixed(2)}  ',
+            pw.Text('Total: Rs.${totalAmount.toStringAsFixed(2)}  ',
                 style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
             pw.Text(
-                'Approved: ₹${approvedAmount.toStringAsFixed(2)}  ',
+                'Approved: Rs.${approvedAmount.toStringAsFixed(2)}  ',
                 style: pw.TextStyle(color: PdfColors.green700)),
-            pw.Text('Pending: ₹${pendingAmount.toStringAsFixed(2)}',
+            pw.Text('Pending: Rs.${pendingAmount.toStringAsFixed(2)}',
                 style: pw.TextStyle(color: PdfColors.orange700)),
           ]),
           pw.SizedBox(height: 16),
