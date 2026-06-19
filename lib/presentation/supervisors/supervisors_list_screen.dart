@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
+import '../expenses/expenses_list_screen.dart' show ExpenseMonthDrilldownScreen;
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart';
@@ -642,10 +643,31 @@ class SupervisorDetailScreen extends ConsumerWidget {
                   onPressed: () =>
                       _showAssignedEmployees(context, ref, sup),
                 ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.receipt_long_rounded, size: 18),
+                  label: const Text('Expense Log & Summary'),
+                  onPressed: () => _showExpenseLog(context, ref, sup),
+                ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _showExpenseLog(BuildContext context, WidgetRef ref, SupervisorModel sup) async {
+    final expenses = await ref.read(expenseRepositoryProvider).getAll(supervisorId: sup.id);
+    if (!context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ExpenseMonthDrilldownScreen(
+          supervisorId: sup.id,
+          supervisorName: sup.name,
+          allExpenses: expenses,
+        ),
       ),
     );
   }
