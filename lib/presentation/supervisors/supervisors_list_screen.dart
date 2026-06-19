@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:typed_data';
+import 'package:intl/intl.dart';
 import '../expenses/expenses_list_screen.dart' show ExpenseMonthDrilldownScreen;
 
 import '../../core/theme/app_theme.dart';
@@ -20,12 +20,12 @@ final supervisorsProvider = StateNotifierProvider.autoDispose<
 class SupervisorsNotifier
     extends StateNotifier<AsyncValue<List<SupervisorModel>>> {
   final SupervisorRepository _repo;
-
   SupervisorsNotifier(this._repo) : super(const AsyncLoading()) {
     load();
   }
 
   Future<void> load({bool? isActive, String? search}) async {
+    state = const AsyncLoading();
     try {
       final data = await _repo.getAll(search: search, isActive: isActive);
       state = AsyncData(data);
@@ -36,6 +36,17 @@ class SupervisorsNotifier
 
   void refresh() => load();
 }
+
+// ─── Supervisor Payroll providers ─────────────────────────────────────────────
+
+final _supervisorPayrollProvider = FutureProvider.autoDispose
+    .family<List<SupervisorPayrollModel>, String>((ref, supervisorId) {
+  return ref
+      .read(supervisorPayrollRepositoryProvider)
+      .getForSupervisor(supervisorId);
+});
+
+// ─── List Screen ──────────────────────────────────────────────────────────────
 
 class SupervisorsListScreen extends ConsumerStatefulWidget {
   const SupervisorsListScreen({super.key});
@@ -65,7 +76,10 @@ class _SupervisorsListScreenState
         actions: [
           IconButton(
               icon: const Icon(Icons.add_rounded),
-              onPressed: () => context.push('/supervisors/new')),
+              onPressed: () async {
+                await context.push('/supervisors/new');
+                ref.read(supervisorsProvider.notifier).refresh();
+              }),
         ],
       ),
       body: Column(
@@ -85,7 +99,8 @@ class _SupervisorsListScreenState
           ),
           Expanded(
             child: supervisors.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () =>
+                  const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Error: $e')),
               data: (list) => list.isEmpty
                   ? w.EmptyState(
@@ -100,11 +115,17 @@ class _SupervisorsListScreenState
                       child: ListView.separated(
                         padding: const EdgeInsets.all(16),
                         itemCount: list.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 8),
                         itemBuilder: (_, i) => _SupervisorCard(
                           supervisor: list[i],
-                          onTap: () =>
-                              context.push('/supervisors/${list[i].id}'),
+                          onTap: () async {
+                            await context
+                                .push('/supervisors/${list[i].id}');
+                            ref
+                                .read(supervisorsProvider.notifier)
+                                .refresh();
+                          },
                         ),
                       ),
                     ),
@@ -113,7 +134,10 @@ class _SupervisorsListScreenState
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/supervisors/new'),
+        onPressed: () async {
+          await context.push('/supervisors/new');
+          ref.read(supervisorsProvider.notifier).refresh();
+        },
         icon: const Icon(Icons.add_rounded),
         label: const Text('Add Supervisor'),
       ),
@@ -149,13 +173,11 @@ class _SupervisorCard extends StatelessWidget {
                   ? NetworkImage(supervisor.profilePhotoUrl!)
                   : null,
               child: supervisor.profilePhotoUrl == null
-                  ? Text(
-                      supervisor.name[0].toUpperCase(),
+                  ? Text(supervisor.name[0].toUpperCase(),
                       style: const TextStyle(
                           color: AppColors.accent600,
                           fontWeight: FontWeight.w700,
-                          fontFamily: 'Inter'),
-                    )
+                          fontFamily: 'Inter'))
                   : null,
             ),
             const SizedBox(width: 12),
@@ -163,7 +185,8 @@ class _SupervisorCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(supervisor.name, style: theme.textTheme.titleMedium),
+                  Text(supervisor.name,
+                      style: theme.textTheme.titleMedium),
                   Text(supervisor.supervisorCode,
                       style: theme.textTheme.bodySmall
                           ?.copyWith(color: AppColors.accent600)),
@@ -181,6 +204,8 @@ class _SupervisorCard extends StatelessWidget {
     );
   }
 }
+
+// ─── Form Screen ──────────────────────────────────────────────────────────────
 
 class SupervisorFormScreen extends ConsumerStatefulWidget {
   final String? supervisorId;
@@ -202,12 +227,12 @@ class _SupervisorFormScreenState
   final _bankAccountController = TextEditingController();
   final _bankIfscController = TextEditingController();
   final _bankNameController = TextEditingController();
+  final _salaryController = TextEditingController(text: '0');
   bool _isActive = true;
   bool _isLoading = false;
   bool _showBankDetails = false;
   File? _photoFile;
   String? _existingPhotoUrl;
-  String? _existingSupervisorId;
 
   bool get isEditing => widget.supervisorId != null;
 
@@ -215,17 +240,16 @@ class _SupervisorFormScreenState
   void initState() {
     super.initState();
     if (isEditing) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _loadSupervisor());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadSupervisor());
     }
   }
 
   Future<void> _loadSupervisor() async {
-    final sup =
-        await ref.read(supervisorRepositoryProvider).getById(widget.supervisorId!);
+    final sup = await ref
+        .read(supervisorRepositoryProvider)
+        .getById(widget.supervisorId!);
     if (sup == null || !mounted) return;
     _nameController.text = sup.name;
-    // Extract username from email (remove @ems.com)
     _usernameController.text = sup.email.replaceAll('@ems.com', '');
     _mobileController.text = sup.mobile ?? '';
     _areaController.text = sup.assignedArea ?? '';
@@ -233,10 +257,11 @@ class _SupervisorFormScreenState
     _bankAccountController.text = sup.bankAccountNumber ?? '';
     _bankIfscController.text = sup.bankIfsc ?? '';
     _bankNameController.text = sup.bankName ?? '';
+    _salaryController.text = sup.monthlySalary.toStringAsFixed(0);
     _isActive = sup.isActive;
     _existingPhotoUrl = sup.profilePhotoUrl;
-    _existingSupervisorId = sup.id;
-    _showBankDetails = sup.hasUpi || (sup.bankAccountNumber?.isNotEmpty ?? false);
+    _showBankDetails =
+        sup.hasUpi || (sup.bankAccountNumber?.isNotEmpty ?? false);
     setState(() {});
   }
 
@@ -250,6 +275,7 @@ class _SupervisorFormScreenState
     _bankAccountController.dispose();
     _bankIfscController.dispose();
     _bankNameController.dispose();
+    _salaryController.dispose();
     super.dispose();
   }
 
@@ -279,21 +305,29 @@ class _SupervisorFormScreenState
             ? null
             : _areaController.text.trim(),
         'is_active': _isActive,
-        'upi_id': _upiController.text.trim().isEmpty ? null : _upiController.text.trim(),
-        'bank_account_number': _bankAccountController.text.trim().isEmpty ? null : _bankAccountController.text.trim(),
-        'bank_ifsc': _bankIfscController.text.trim().isEmpty ? null : _bankIfscController.text.trim().toUpperCase(),
-        'bank_name': _bankNameController.text.trim().isEmpty ? null : _bankNameController.text.trim(),
+        'upi_id': _upiController.text.trim().isEmpty
+            ? null
+            : _upiController.text.trim(),
+        'bank_account_number': _bankAccountController.text.trim().isEmpty
+            ? null
+            : _bankAccountController.text.trim(),
+        'bank_ifsc': _bankIfscController.text.trim().isEmpty
+            ? null
+            : _bankIfscController.text.trim().toUpperCase(),
+        'bank_name': _bankNameController.text.trim().isEmpty
+            ? null
+            : _bankNameController.text.trim(),
+        'monthly_salary':
+            double.tryParse(_salaryController.text) ?? 0,
       };
 
       SupervisorModel supervisor;
       if (isEditing) {
         supervisor = await repo.update(widget.supervisorId!, data);
       } else {
-        // Default password Abcd@123, must_change_password = true
         supervisor = await repo.create(data, 'Abcd@123');
       }
 
-      // Upload photo if selected
       if (_photoFile != null) {
         final bytes = await _photoFile!.readAsBytes();
         await repo.uploadPhoto(
@@ -308,7 +342,7 @@ class _SupervisorFormScreenState
           SnackBar(
             content: Text(isEditing
                 ? 'Supervisor updated'
-                : 'Supervisor created. Default password: Abcd@123'),
+                : 'Supervisor created. Login: $username / Abcd@123'),
             backgroundColor: AppColors.success500,
           ),
         );
@@ -353,7 +387,8 @@ class _SupervisorFormScreenState
                             : _existingPhotoUrl != null
                                 ? NetworkImage(_existingPhotoUrl!)
                                 : null,
-                        child: _photoFile == null && _existingPhotoUrl == null
+                        child: _photoFile == null &&
+                                _existingPhotoUrl == null
                             ? const Icon(Icons.person_rounded,
                                 color: AppColors.accent400, size: 48)
                             : null,
@@ -366,7 +401,8 @@ class _SupervisorFormScreenState
                           decoration: BoxDecoration(
                             color: AppColors.primary500,
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
+                            border:
+                                Border.all(color: Colors.white, width: 2),
                           ),
                           child: const Icon(Icons.camera_alt_rounded,
                               color: Colors.white, size: 14),
@@ -383,7 +419,8 @@ class _SupervisorFormScreenState
                 decoration: const InputDecoration(
                     labelText: 'Full Name *',
                     prefixIcon: Icon(Icons.person_outline)),
-                validator: (v) => ValidationUtils.validateRequired(v, 'Name'),
+                validator: (v) =>
+                    ValidationUtils.validateRequired(v, 'Name'),
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -392,16 +429,16 @@ class _SupervisorFormScreenState
                 readOnly: isEditing,
                 decoration: InputDecoration(
                   labelText: 'Username *',
-                  prefixIcon: const Icon(Icons.person_outline_rounded),
-                  helperText: isEditing ? 'Username cannot be changed' : null,
+                  prefixIcon:
+                      const Icon(Icons.person_outline_rounded),
+                  helperText:
+                      isEditing ? 'Username cannot be changed' : null,
                 ),
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
+                  if (v == null || v.trim().isEmpty)
                     return 'Username is required';
-                  }
-                  if (v.contains('@') || v.contains(' ')) {
+                  if (v.contains('@') || v.contains(' '))
                     return 'Username cannot contain @ or spaces';
-                  }
                   return null;
                 },
               ),
@@ -421,20 +458,42 @@ class _SupervisorFormScreenState
                     labelText: 'Assigned Area',
                     prefixIcon: Icon(Icons.map_outlined)),
               ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _salaryController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Monthly Salary (₹)',
+                  prefixIcon:
+                      Icon(Icons.account_balance_wallet_outlined),
+                  helperText:
+                      'Fixed monthly salary for this supervisor',
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  if (double.tryParse(v) == null)
+                    return 'Enter a valid amount';
+                  return null;
+                },
+              ),
               const SizedBox(height: 20),
               Align(
                 alignment: Alignment.centerLeft,
                 child: InkWell(
-                  onTap: () => setState(() => _showBankDetails = !_showBankDetails),
+                  onTap: () => setState(
+                      () => _showBankDetails = !_showBankDetails),
                   child: Row(
                     children: [
                       Text(
                         'Payment Details',
-                        style: theme.textTheme.titleMedium?.copyWith(color: AppColors.primary500),
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(color: AppColors.primary500),
                       ),
                       const SizedBox(width: 8),
                       Icon(
-                        _showBankDetails ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                        _showBankDetails
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
                         color: AppColors.primary500,
                       ),
                     ],
@@ -445,8 +504,9 @@ class _SupervisorFormScreenState
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Required for paying expense reimbursements via UPI',
-                  style: theme.textTheme.bodySmall?.copyWith(color: AppColors.secondary400),
+                  'UPI ID required to pay salary/expenses via UPI',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: AppColors.secondary400),
                 ),
               ),
               if (_showBankDetails) ...[
@@ -456,11 +516,13 @@ class _SupervisorFormScreenState
                   decoration: const InputDecoration(
                     labelText: 'UPI ID',
                     hintText: 'name@bankupi',
-                    prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                    prefixIcon: Icon(
+                        Icons.account_balance_wallet_outlined),
                   ),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return null;
-                    if (!v.contains('@')) return 'Enter a valid UPI ID (e.g. name@bank)';
+                    if (!v.contains('@'))
+                      return 'Enter a valid UPI ID (e.g. name@bank)';
                     return null;
                   },
                 ),
@@ -508,8 +570,8 @@ class _SupervisorFormScreenState
                       Expanded(
                         child: Text(
                           'Default password: Abcd@123\nSupervisor will be prompted to change on first login.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.accent600),
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: AppColors.accent600),
                         ),
                       ),
                     ],
@@ -518,8 +580,9 @@ class _SupervisorFormScreenState
               const SizedBox(height: 16),
               SwitchListTile(
                 title: const Text('Active Status'),
-                subtitle: Text(
-                    _isActive ? 'Supervisor is active' : 'Supervisor is inactive'),
+                subtitle: Text(_isActive
+                    ? 'Supervisor is active'
+                    : 'Supervisor is inactive'),
                 value: _isActive,
                 onChanged: (v) => setState(() => _isActive = v),
                 activeColor: AppColors.success500,
@@ -533,9 +596,13 @@ class _SupervisorFormScreenState
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : Text(isEditing ? 'Update Supervisor' : 'Add Supervisor'),
+                            strokeWidth: 2,
+                            color: Colors.white))
+                    : Text(isEditing
+                        ? 'Update Supervisor'
+                        : 'Add Supervisor'),
               ),
+              const SizedBox(height: 32),
             ],
           ),
         ),
@@ -544,19 +611,25 @@ class _SupervisorFormScreenState
   }
 }
 
+// ─── Detail Screen ────────────────────────────────────────────────────────────
+
 class SupervisorDetailScreen extends ConsumerWidget {
   final String id;
   const SupervisorDetailScreen({super.key, required this.id});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final paymentEnabled = ref.watch(paymentModuleEnabledProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Supervisor Details'),
         actions: [
           IconButton(
               icon: const Icon(Icons.edit_outlined),
-              onPressed: () => context.push('/supervisors/$id/edit')),
+              onPressed: () async {
+                await context.push('/supervisors/$id/edit');
+              }),
         ],
       ),
       body: FutureBuilder(
@@ -582,19 +655,18 @@ class SupervisorDetailScreen extends ConsumerWidget {
                             ? NetworkImage(sup.profilePhotoUrl!)
                             : null,
                         child: sup.profilePhotoUrl == null
-                            ? Text(
-                                sup.name[0].toUpperCase(),
+                            ? Text(sup.name[0].toUpperCase(),
                                 style: const TextStyle(
                                     fontSize: 36,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.accent600,
-                                    fontFamily: 'Inter'),
-                              )
+                                    fontFamily: 'Inter'))
                             : null,
                       ),
                       const SizedBox(height: 12),
                       Text(sup.name,
-                          style: Theme.of(context).textTheme.headlineMedium),
+                          style:
+                              Theme.of(context).textTheme.headlineMedium),
                       Text(sup.supervisorCode,
                           style: Theme.of(context)
                               .textTheme
@@ -602,7 +674,8 @@ class SupervisorDetailScreen extends ConsumerWidget {
                               ?.copyWith(color: AppColors.accent600)),
                       const SizedBox(height: 8),
                       w.StatusBadge(
-                          status: sup.isActive ? 'active' : 'inactive'),
+                          status:
+                              sup.isActive ? 'active' : 'inactive'),
                     ],
                   ),
                 ),
@@ -621,6 +694,10 @@ class SupervisorDetailScreen extends ConsumerWidget {
                       icon: Icons.map_outlined,
                       label: 'Area',
                       value: sup.assignedArea!),
+                _InfoRow(
+                    icon: Icons.payments_outlined,
+                    label: 'Monthly Salary',
+                    value: CurrencyUtils.format(sup.monthlySalary)),
                 if (sup.hasUpi)
                   _InfoRow(
                       icon: Icons.account_balance_wallet_outlined,
@@ -631,11 +708,6 @@ class SupervisorDetailScreen extends ConsumerWidget {
                       icon: Icons.account_balance_outlined,
                       label: 'Account No.',
                       value: sup.bankAccountNumber!),
-                if (sup.bankIfsc != null)
-                  _InfoRow(
-                      icon: Icons.pin_outlined,
-                      label: 'IFSC',
-                      value: sup.bankIfsc!),
                 const SizedBox(height: 24),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.people_rounded, size: 18),
@@ -646,8 +718,15 @@ class SupervisorDetailScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.receipt_long_rounded, size: 18),
-                  label: const Text('Expense Log & Summary'),
+                  label: const Text('Expense Log'),
                   onPressed: () => _showExpenseLog(context, ref, sup),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.payments_rounded, size: 18),
+                  label: const Text('Salary History'),
+                  onPressed: () => _showSalaryHistory(
+                      context, ref, sup, paymentEnabled),
                 ),
               ],
             ),
@@ -657,8 +736,11 @@ class SupervisorDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _showExpenseLog(BuildContext context, WidgetRef ref, SupervisorModel sup) async {
-    final expenses = await ref.read(expenseRepositoryProvider).getAll(supervisorId: sup.id);
+  void _showExpenseLog(
+      BuildContext context, WidgetRef ref, SupervisorModel sup) async {
+    final expenses = await ref
+        .read(expenseRepositoryProvider)
+        .getAll(supervisorId: sup.id);
     if (!context.mounted) return;
     Navigator.push(
       context,
@@ -672,10 +754,24 @@ class SupervisorDetailScreen extends ConsumerWidget {
     );
   }
 
+  void _showSalaryHistory(BuildContext context, WidgetRef ref,
+      SupervisorModel sup, bool paymentEnabled) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SupervisorSalaryScreen(
+          supervisor: sup,
+          paymentEnabled: paymentEnabled,
+        ),
+      ),
+    );
+  }
+
   void _showAssignedEmployees(
       BuildContext context, WidgetRef ref, SupervisorModel sup) async {
-    final employees =
-        await ref.read(supervisorRepositoryProvider).getAssignedEmployees(sup.id);
+    final employees = await ref
+        .read(supervisorRepositoryProvider)
+        .getAssignedEmployees(sup.id);
     if (!context.mounted) return;
 
     showModalBottomSheet(
@@ -730,6 +826,265 @@ class SupervisorDetailScreen extends ConsumerWidget {
   }
 }
 
+// ─── Supervisor Salary Screen (admin view) ───────────────────────────────────
+
+class SupervisorSalaryScreen extends ConsumerStatefulWidget {
+  final SupervisorModel supervisor;
+  final bool paymentEnabled;
+  const SupervisorSalaryScreen(
+      {super.key, required this.supervisor, required this.paymentEnabled});
+
+  @override
+  ConsumerState<SupervisorSalaryScreen> createState() =>
+      _SupervisorSalaryScreenState();
+}
+
+class _SupervisorSalaryScreenState
+    extends ConsumerState<SupervisorSalaryScreen> {
+  bool _isProcessing = false;
+
+  Future<void> _processMonth() async {
+    final bonusCtrl = TextEditingController();
+    final deductionCtrl = TextEditingController();
+    final remarksCtrl = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+            'Process Salary — ${DateFormat('MMMM yyyy').format(DateTime.now())}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Base Salary: ${CurrencyUtils.format(widget.supervisor.monthlySalary)}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: bonusCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Bonus (₹)'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: deductionCtrl,
+                keyboardType: TextInputType.number,
+                decoration:
+                    const InputDecoration(labelText: 'Deduction (₹)'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: remarksCtrl,
+                decoration: const InputDecoration(labelText: 'Remarks'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Process')),
+        ],
+      ),
+    );
+
+    if (result != true || !mounted) return;
+
+    setState(() => _isProcessing = true);
+    try {
+      final now = DateTime.now();
+      await ref.read(supervisorPayrollRepositoryProvider).processMonth(
+            widget.supervisor.id,
+            now.month,
+            now.year,
+            widget.supervisor.monthlySalary,
+            bonus: double.tryParse(bonusCtrl.text) ?? 0,
+            deduction: double.tryParse(deductionCtrl.text) ?? 0,
+            remarks: remarksCtrl.text.trim().isEmpty
+                ? null
+                : remarksCtrl.text.trim(),
+          );
+      ref.invalidate(_supervisorPayrollProvider(widget.supervisor.id));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Salary processed'),
+            backgroundColor: AppColors.success500));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error500));
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final payrollAsync =
+        ref.watch(_supervisorPayrollProvider(widget.supervisor.id));
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${widget.supervisor.name} — Salary'),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Process'),
+            onPressed: _isProcessing ? null : _processMonth,
+          ),
+        ],
+      ),
+      body: payrollAsync.when(
+        loading: () =>
+            const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
+        data: (list) {
+          if (list.isEmpty) {
+            return const w.EmptyState(
+              title: 'No salary records',
+              subtitle: 'Process this month\'s salary to get started',
+              icon: Icons.payments_outlined,
+            );
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: list.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (_, i) => _SalaryCard(
+              record: list[i],
+              supervisor: widget.supervisor,
+              paymentEnabled: widget.paymentEnabled,
+              onRefresh: () => ref.invalidate(
+                  _supervisorPayrollProvider(widget.supervisor.id)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SalaryCard extends ConsumerWidget {
+  final SupervisorPayrollModel record;
+  final SupervisorModel supervisor;
+  final bool paymentEnabled;
+  final VoidCallback onRefresh;
+
+  const _SalaryCard({
+    required this.record,
+    required this.supervisor,
+    required this.paymentEnabled,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final monthName = DateFormat('MMMM yyyy')
+        .format(DateTime(record.payrollYear, record.payrollMonth));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.secondary200),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(monthName,
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 4),
+                      Text(
+                          'Base: ${CurrencyUtils.format(record.monthlySalary)}  '
+                          'Bonus: ${CurrencyUtils.format(record.bonus)}  '
+                          'Ded: ${CurrencyUtils.format(record.deduction)}',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(CurrencyUtils.format(record.netAmount),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(color: AppColors.primary600)),
+                    const SizedBox(height: 4),
+                    w.StatusBadge(
+                        status: record.isPaid ? 'paid' : record.status),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (!record.isPaid)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Row(
+                children: [
+                  if (paymentEnabled && supervisor.hasUpi)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(
+                            Icons.account_balance_wallet_rounded,
+                            size: 16),
+                        label: const Text('Pay via UPI'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.success600,
+                          side: const BorderSide(
+                              color: AppColors.success500),
+                        ),
+                        onPressed: () async {
+                          await w.UpiPaymentHelper.paySupervisorSalary(
+                              context, ref, record, supervisor);
+                          onRefresh();
+                        },
+                      ),
+                    ),
+                  if (paymentEnabled && supervisor.hasUpi)
+                    const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.check_rounded, size: 16),
+                      label: const Text('Mark Paid'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary600,
+                        side: const BorderSide(
+                            color: AppColors.primary500),
+                      ),
+                      onPressed: () async {
+                        await ref
+                            .read(supervisorPayrollRepositoryProvider)
+                            .markAsPaid(record.id);
+                        onRefresh();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -749,7 +1104,8 @@ class _InfoRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label, style: Theme.of(context).textTheme.labelSmall),
-              Text(value, style: Theme.of(context).textTheme.bodyMedium),
+              Text(value,
+                  style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
         ],
