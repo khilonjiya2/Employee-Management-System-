@@ -1284,3 +1284,92 @@ final dashboardStatsProvider =
     'payroll_pending': payrollSummary['pending'] ?? 0,
   };
 });
+
+
+// Add at bottom of auth_repository.dart (after dashboardStatsProvider)
+
+final companyProvider = FutureProvider.autoDispose<CompanyModel?>((ref) async {
+  final client = ref.read(supabaseProvider);
+  final profile = await ref.read(currentProfileProvider.future);
+  if (profile?.companyId == null) return null;
+  final data = await client
+      .from('companies')
+      .select()
+      .eq('id', profile!.companyId!)
+      .maybeSingle();
+  if (data == null) return null;
+  return CompanyModel.fromJson(data);
+});
+
+final paymentModuleEnabledProvider = Provider<bool>((ref) {
+  return ref.watch(companyProvider).valueOrNull?.paymentModuleEnabled ?? false;
+});
+
+final supervisorPayrollRepositoryProvider =
+    Provider<SupervisorPayrollRepository>((ref) {
+  return SupervisorPayrollRepository(ref.watch(supabaseProvider));
+});
+
+class SupervisorPayrollRepository {
+  final SupabaseClient _client;
+  SupervisorPayrollRepository(this._client);
+
+  Future<List<SupervisorPayrollModel>> getForSupervisor(
+      String supervisorId) async {
+    final data = await _client
+        .from('supervisor_payroll')
+        .select()
+        .eq('supervisor_id', supervisorId)
+        .order('payroll_year', ascending: false)
+        .order('payroll_month', ascending: false);
+    return (data as List)
+        .map((p) =>
+            SupervisorPayrollModel.fromJson(p as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<SupervisorPayrollModel> processMonth(
+      String supervisorId, int month, int year, double salary,
+      {double bonus = 0, double deduction = 0, String? remarks}) async {
+    final net = salary + bonus - deduction;
+    final data = await _client
+        .from('supervisor_payroll')
+        .upsert({
+          'supervisor_id': supervisorId,
+          'payroll_month': month,
+          'payroll_year': year,
+          'monthly_salary': salary,
+          'bonus': bonus,
+          'deduction': deduction,
+          'net_amount': net,
+          'status': 'processed',
+          'processed_by': _client.auth.currentUser?.id,
+          'processed_at': DateTime.now().toIso8601String(),
+          'remarks': remarks,
+        }, onConflict: 'supervisor_id,payroll_month,payroll_year')
+        .select()
+        .single();
+    return SupervisorPayrollModel.fromJson(data);
+  }
+
+  Future<void> confirmPayment(String id, {String? utrReference}) async {
+    await _client.from('supervisor_payroll').update({
+      'status': 'paid',
+      'payment_status': 'paid',
+      'payment_method': 'upi',
+      'utr_reference': utrReference,
+      'paid_at': DateTime.now().toIso8601String(),
+      'payment_confirmed_at': DateTime.now().toIso8601String(),
+      'payment_confirmed_by': _client.auth.currentUser?.id,
+    }).eq('id', id);
+  }
+
+  Future<void> markAsPaid(String id) async {
+    await _client.from('supervisor_payroll').update({
+      'status': 'paid',
+      'payment_status': 'paid',
+      'payment_method': 'cash',
+      'paid_at': DateTime.now().toIso8601String(),
+    }).eq('id', id);
+  }
+}
