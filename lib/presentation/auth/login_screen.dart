@@ -6,9 +6,6 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart';
 import '../../data/repositories/auth_repository.dart';
 
-final loginLoadingProvider = StateProvider<bool>((_) => false);
-final loginErrorProvider = StateProvider<String?>((_) => null);
-
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -21,6 +18,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _obscurePassword = true;
+  bool _isLoading = false;
+  String? _error;
 
   @override
   void dispose() {
@@ -31,60 +30,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_isLoading) return;
 
-    ref.read(loginLoadingProvider.notifier).state = true;
-    ref.read(loginErrorProvider.notifier).state = null;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     try {
       final auth = ref.read(authRepositoryProvider);
-      final email = '${_emailController.text.trim().toUpperCase()}@ems.com';
+      final username = _emailController.text.trim().toUpperCase();
+      final email = '$username@ems.com';
 
       await auth.signInWithEmail(email, _passwordController.text);
 
+      // Invalidate and wait for fresh profile
       ref.invalidate(currentProfileProvider);
       final profile = await ref.read(currentProfileProvider.future);
 
       if (!mounted) return;
 
       if (profile == null) {
-        ref.read(loginErrorProvider.notifier).state =
-            'Could not load your profile. Please try again.';
-        return;
-      }
-
-      if (!profile.isActive) {
-        ref.read(loginErrorProvider.notifier).state =
-            'Your account has been deactivated. Contact your administrator.';
+        setState(() => _error = 'Could not load your profile. Please try again.');
         await auth.signOut();
         return;
       }
 
-      // must_change_password takes priority over role-based routing,
-      // regardless of role (admin/supervisor/employee).
-      if (profile.mustChangePassword == true) {
+      if (!profile.isActive) {
+        setState(() => _error = 'Your account has been deactivated. Contact your administrator.');
+        await auth.signOut();
+        return;
+      }
+
+      if (profile.mustChangePassword) {
         context.go('/change-password');
         return;
       }
 
-      // Role-based landing route. Employee gets its own dashboard route;
-      // admin/supervisor both land on /dashboard which internally branches
-      // via DashboardRouterWidget.
-      if (profile.isEmployee) {
-        context.go('/dashboard');
-      } else {
-        context.go('/dashboard');
-      }
+      context.go('/dashboard');
     } catch (e) {
-      ref.read(loginErrorProvider.notifier).state =
-          e.toString().replaceAll('AuthException: ', '');
+      if (mounted) {
+        setState(() =>
+            _error = e.toString().replaceAll('AuthException: ', '').replaceAll('Exception: ', ''));
+      }
     } finally {
-      ref.read(loginLoadingProvider.notifier).state = false;
+      if (mounted) setState(() => _isLoading = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
-    final isLoading = ref.watch(loginLoadingProvider);
-    final error = ref.watch(loginErrorProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -100,7 +95,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 56),
                 _buildHeader(theme),
                 const SizedBox(height: 48),
-                _buildCard(theme, isLoading, error),
+                _buildCard(theme),
                 const SizedBox(height: 32),
               ],
             ),
@@ -127,25 +122,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 color: AppColors.primary100,
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: const Icon(
-                Icons.business_center_rounded,
-                size: 80,
-                color: AppColors.primary500,
-              ),
+              child: const Icon(Icons.business_center_rounded,
+                  size: 80, color: AppColors.primary500),
             ),
           ),
         ),
         const SizedBox(height: 20),
-        Text(
-          'Employee Management System',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineSmall,
-        ),
+        Text('Employee Management System',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineSmall),
       ],
     );
   }
 
-  Widget _buildCard(ThemeData theme, bool isLoading, String? error) {
+  Widget _buildCard(ThemeData theme) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -153,10 +143,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         border: Border.all(color: AppColors.secondary200),
         boxShadow: [
           BoxShadow(
-            color: AppColors.secondary200,
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
+              color: AppColors.secondary200,
+              blurRadius: 16,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Padding(
@@ -167,10 +156,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               controller: _emailController,
               textCapitalization: TextCapitalization.characters,
               textInputAction: TextInputAction.next,
+              enabled: !_isLoading,
               decoration: const InputDecoration(
-                labelText: 'User ID',
-                prefixIcon: Icon(Icons.person_outline),
-              ),
+                  labelText: 'User ID',
+                  prefixIcon: Icon(Icons.person_outline)),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'User ID is required';
                 return null;
@@ -181,6 +170,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               controller: _passwordController,
               obscureText: _obscurePassword,
               textInputAction: TextInputAction.done,
+              enabled: !_isLoading,
               onFieldSubmitted: (_) => _handleLogin(),
               decoration: InputDecoration(
                 labelText: 'Password',
@@ -195,7 +185,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               validator: ValidationUtils.validatePassword,
             ),
-            if (error != null) ...[
+            if (_error != null) ...[
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
@@ -203,8 +193,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.error50,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: AppColors.error500.withOpacity(0.3)),
+                  border: Border.all(color: AppColors.error500.withOpacity(0.3)),
                 ),
                 child: Row(
                   children: [
@@ -212,7 +201,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         color: AppColors.error600, size: 16),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(error,
+                      child: Text(_error!,
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: AppColors.error600)),
                     ),
@@ -224,8 +213,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: isLoading ? null : _handleLogin,
-                child: isLoading
+                onPressed: _isLoading ? null : _handleLogin,
+                child: _isLoading
                     ? const SizedBox(
                         height: 20,
                         width: 20,
@@ -233,6 +222,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             strokeWidth: 2, color: Colors.white))
                     : const Text('Sign In'),
               ),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: _isLoading
+                  ? null
+                  : () => context.push('/forgot-password'),
+              child: const Text('Forgot Password?'),
             ),
           ],
         ),
