@@ -120,65 +120,104 @@ class PayrollDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildPaymentSection(BuildContext context, WidgetRef ref, PayrollModel p) {
-    if (p.isPaid) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.success50,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.success100),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded, color: AppColors.success600),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                p.utrReference != null ? 'Paid via UPI · UTR: ${p.utrReference}' : 'Paid',
-                style: const TextStyle(color: AppColors.success700, fontFamily: 'Inter', fontWeight: FontWeight.w600),
-              ),
+  if (p.isPaid) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.success50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.success100),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle_rounded, color: AppColors.success600),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              p.utrReference != null
+                  ? 'Paid via UPI · UTR: ${p.utrReference}'
+                  : 'Marked as Paid',
+              style: const TextStyle(
+                  color: AppColors.success700,
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w600),
             ),
-          ],
-        ),
-      );
-    }
+          ),
+        ],
+      ),
+    );
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+  final paymentEnabled = ref.watch(paymentModuleEnabledProvider);
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (paymentEnabled)
         ElevatedButton.icon(
           icon: const Icon(Icons.account_balance_wallet_rounded, size: 18),
           label: Text('Pay ${CurrencyUtils.format(p.netWage)} via UPI'),
           style: ElevatedButton.styleFrom(backgroundColor: AppColors.success500),
           onPressed: () => w.UpiPaymentHelper.payPayroll(context, ref, p),
         ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          icon: const Icon(Icons.done_rounded, size: 18),
-          label: const Text('Mark as Paid (Other Method)'),
-          onPressed: () async {
-            final confirm = await w.ConfirmDialog.show(
-              context,
-              title: 'Mark as Paid?',
-              message: 'Mark ${p.employeeName}\'s salary of ${CurrencyUtils.format(p.netWage)} as paid via a method other than UPI?',
-              confirmLabel: 'Mark Paid',
-              confirmColor: AppColors.success500,
-            );
-            if (confirm != true || !context.mounted) return;
+      if (paymentEnabled) const SizedBox(height: 10),
+      OutlinedButton.icon(
+        icon: const Icon(Icons.done_rounded, size: 18),
+        label: const Text('Mark as Paid'),
+        onPressed: () => _markAsPaid(context, ref, p),
+      ),
+    ],
+  );
+}
 
-            try {
-              await ref.read(payrollRepositoryProvider).markAsPaid(p.id);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Marked as paid'), backgroundColor: AppColors.success500));
-                context.pop();
-              }
-            } catch (e) {
-              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error500));
-            }
-          },
+Future<void> _markAsPaid(
+    BuildContext context, WidgetRef ref, PayrollModel p) async {
+  final confirm = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    useRootNavigator: true,
+    builder: (dialogContext) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: const Text('Mark as Paid?'),
+        content: Text(
+          'Mark ${p.employeeName ?? "employee"}\'s salary of '
+          '${CurrencyUtils.format(p.netWage)} as paid?',
         ),
-      ],
-    );
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext, rootNavigator: true).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext, rootNavigator: true).pop(true),
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.success500),
+            child: const Text('Mark Paid'),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  if (confirm != true || !context.mounted) return;
+
+  try {
+    await ref.read(payrollRepositoryProvider).markAsPaid(p.id);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Marked as paid'),
+          backgroundColor: AppColors.success500));
+      context.pop();
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: AppColors.error500));
+    }
   }
 }
 
