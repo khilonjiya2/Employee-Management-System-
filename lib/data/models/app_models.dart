@@ -829,3 +829,133 @@ class NotificationModel extends Equatable {
   @override
   List<Object?> get props => [id, isRead];
 }
+
+
+// Add to app_models.dart — append at bottom
+
+class CompanyModel extends Equatable {
+  final String id;
+  final String companyName;
+  final String? ownerProfileId;
+  final String subscriptionPlan;
+  final String status;
+  final String? logoUrl;
+  final String? address;
+  final String? phone;
+  final String? email;
+  final String? gstin;
+  final String currencySymbol;
+  final String timezone;
+  final bool paymentModuleEnabled;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const CompanyModel({
+    required this.id,
+    required this.companyName,
+    this.ownerProfileId,
+    required this.subscriptionPlan,
+    required this.status,
+    this.logoUrl,
+    this.address,
+    this.phone,
+    this.email,
+    this.gstin,
+    required this.currencySymbol,
+    required this.timezone,
+    this.paymentModuleEnabled = false,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory CompanyModel.fromJson(Map<String, dynamic> json) => CompanyModel(
+        id: json['id'] as String,
+        companyName: json['company_name'] as String,
+        ownerProfileId: json['owner_profile_id'] as String?,
+        subscriptionPlan: json['subscription_plan'] as String? ?? 'free',
+        status: json['status'] as String? ?? 'active',
+        logoUrl: json['logo_url'] as String?,
+        address: json['address'] as String?,
+        phone: json['phone'] as String?,
+        email: json['email'] as String?,
+        gstin: json['gstin'] as String?,
+        currencySymbol: json['currency_symbol'] as String? ?? '₹',
+        timezone: json['timezone'] as String? ?? 'Asia/Kolkata',
+        paymentModuleEnabled: json['payment_module_enabled'] as bool? ?? false,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        updatedAt: DateTime.parse(json['updated_at'] as String),
+      );
+
+  bool get isActive => status == 'active';
+
+  @override
+  List<Object?> get props => [id, companyName, status, paymentModuleEnabled];
+}
+
+class SupervisorPayrollModel extends Equatable {
+  final String id;
+  final String supervisorId;
+  final int payrollMonth;
+  final int payrollYear;
+  final double monthlySalary;
+  final double bonus;
+  final double deduction;
+  final double netAmount;
+  final String status;
+  final String paymentStatus;
+  final String? paymentMethod;
+  final String? utrReference;
+  final DateTime? paymentConfirmedAt;
+  final DateTime? paidAt;
+  final String? remarks;
+  final DateTime createdAt;
+
+  const SupervisorPayrollModel({
+    required this.id,
+    required this.supervisorId,
+    required this.payrollMonth,
+    required this.payrollYear,
+    required this.monthlySalary,
+    required this.bonus,
+    required this.deduction,
+    required this.netAmount,
+    required this.status,
+    required this.paymentStatus,
+    this.paymentMethod,
+    this.utrReference,
+    this.paymentConfirmedAt,
+    this.paidAt,
+    this.remarks,
+    required this.createdAt,
+  });
+
+  factory SupervisorPayrollModel.fromJson(Map<String, dynamic> json) =>
+      SupervisorPayrollModel(
+        id: json['id'] as String,
+        supervisorId: json['supervisor_id'] as String,
+        payrollMonth: json['payroll_month'] as int,
+        payrollYear: json['payroll_year'] as int,
+        monthlySalary: (json['monthly_salary'] as num?)?.toDouble() ?? 0,
+        bonus: (json['bonus'] as num?)?.toDouble() ?? 0,
+        deduction: (json['deduction'] as num?)?.toDouble() ?? 0,
+        netAmount: (json['net_amount'] as num?)?.toDouble() ?? 0,
+        status: json['status'] as String? ?? 'pending',
+        paymentStatus: json['payment_status'] as String? ?? 'unpaid',
+        paymentMethod: json['payment_method'] as String?,
+        utrReference: json['utr_reference'] as String?,
+        paymentConfirmedAt: json['payment_confirmed_at'] != null
+            ? DateTime.parse(json['payment_confirmed_at'] as String)
+            : null,
+        paidAt: json['paid_at'] != null
+            ? DateTime.parse(json['paid_at'] as String)
+            : null,
+        remarks: json['remarks'] as String?,
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+
+  bool get isPaid => paymentStatus == 'paid' || status == 'paid';
+
+  @override
+  List<Object?> get props =>
+      [id, supervisorId, payrollMonth, payrollYear, status, paymentStatus];
+}
