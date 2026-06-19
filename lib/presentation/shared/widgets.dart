@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/models/app_models.dart'; // already there, just ensure SupervisorPayrollModel is imported
 
 import '../../core/theme/app_theme.dart';
 
@@ -426,6 +427,44 @@ class UpiPaymentHelper {
               upiId: upiId,
               paymentStatus: 'paid',
               utrReference: utr,
+            );
+      },
+    );
+  }
+
+static Future<void> paySupervisorSalary(
+    BuildContext context,
+    WidgetRef ref,
+    SupervisorPayrollModel record,
+    SupervisorModel supervisor,
+  ) async {
+    final upiId = supervisor.upiId;
+    if (upiId == null || upiId.trim().isEmpty) {
+      if (context.mounted) _showNoUpiDialog(context, supervisor.name);
+      return;
+    }
+
+    await _launchAndConfirm(
+      context: context,
+      ref: ref,
+      payeeName: supervisor.name,
+      upiId: upiId,
+      amount: record.netAmount,
+      referenceNote:
+          'Salary ${record.payrollMonth}-${record.payrollYear}',
+      onConfirmed: (utr) async {
+        await ref
+            .read(supervisorPayrollRepositoryProvider)
+            .confirmPayment(record.id, utrReference: utr);
+        await ref.read(paymentRepositoryProvider).logPayment(
+              referenceType: 'expense', // use expense type for supervisor
+              referenceId: record.id,
+              supervisorId: record.supervisorId,
+              amount: record.netAmount,
+              upiId: upiId,
+              paymentStatus: 'paid',
+              utrReference: utr,
+              remarks: 'Supervisor salary',
             );
       },
     );
