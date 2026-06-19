@@ -485,15 +485,31 @@ class UpiPaymentHelper {
     if (!context.mounted) return;
 
     // Ask the admin to confirm the payment after returning from the UPI app.
-    final result = await showDialog<Map<String, dynamic>>(
+    // The result is delivered via a callback that explicitly closes the
+    // dialog using its OWN context (dialogContext), never the outer screen
+    // context — this is the same fix pattern used for the Manage Locations
+    // bug: relying on an ambient/implicit context for Navigator.pop is
+    // fragile and can silently fail to close the correct route.
+    String? confirmedUtr;
+    bool wasConfirmed = false;
+
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _PaymentConfirmDialog(payeeName: payeeName, amount: amount),
+      builder: (dialogContext) => _PaymentConfirmDialog(
+        payeeName: payeeName,
+        amount: amount,
+        onResult: (confirmed, utr) {
+          wasConfirmed = confirmed;
+          confirmedUtr = utr;
+          Navigator.of(dialogContext).pop();
+        },
+      ),
     );
 
-    if (result == null || result['confirmed'] != true) return;
+    if (!wasConfirmed) return;
 
-    final utr = (result['utr'] as String?)?.trim();
+    final utr = confirmedUtr?.trim();
     try {
       await onConfirmed(utr == null || utr.isEmpty ? null : utr);
       if (context.mounted) {
@@ -517,7 +533,13 @@ class UpiPaymentHelper {
 class _PaymentConfirmDialog extends StatefulWidget {
   final String payeeName;
   final double amount;
-  const _PaymentConfirmDialog({required this.payeeName, required this.amount});
+  final void Function(bool confirmed, String? utr) onResult;
+
+  const _PaymentConfirmDialog({
+    required this.payeeName,
+    required this.amount,
+    required this.onResult,
+  });
 
   @override
   State<_PaymentConfirmDialog> createState() => _PaymentConfirmDialogState();
@@ -540,7 +562,7 @@ class _PaymentConfirmDialogState extends State<_PaymentConfirmDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Did the UPI payment of ₹${widget.amount.toStringAsFixed(2)} to ${widget.payeeName} go through?'),
+          Text('Did the UPI payment of Rs.${widget.amount.toStringAsFixed(2)} to ${widget.payeeName} go through?'),
           const SizedBox(height: 16),
           TextField(
             controller: _utrController,
@@ -553,14 +575,11 @@ class _PaymentConfirmDialogState extends State<_PaymentConfirmDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context, {'confirmed': false}),
+          onPressed: () => widget.onResult(false, null),
           child: const Text('Not Yet'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, {
-            'confirmed': true,
-            'utr': _utrController.text,
-          }),
+          onPressed: () => widget.onResult(true, _utrController.text),
           style: FilledButton.styleFrom(backgroundColor: AppColors.success500),
           child: const Text('Yes, Paid'),
         ),
