@@ -389,17 +389,10 @@ class _AttendanceCard extends ConsumerWidget {
             ],
             const Divider(height: 1),
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const Icon(Icons.touch_app_rounded,
-                      size: 14, color: AppColors.secondary400),
-                  const SizedBox(width: 4),
-                  Text('Tap to view full report',
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: AppColors.secondary400)),
-                  const Spacer(),
                   if (attendance.latitude != null &&
                       attendance.longitude != null)
                     TextButton.icon(
