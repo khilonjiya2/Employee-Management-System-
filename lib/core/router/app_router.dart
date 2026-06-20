@@ -1,320 +1,155 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'dart:async';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart';
+import '../constants/app_constants.dart';
 
-import '../../data/repositories/auth_repository.dart';
+/// Translates raw exception text (often a raw Postgres/Supabase error)
+/// into something a user can actually understand. Centralized here so
+/// every screen's catch block can use the same logic instead of showing
+/// "PostgrestException(message: ..., code: 23505, ...)" to users.
+class ErrorUtils {
+  ErrorUtils._();
 
-import '../../presentation/auth/login_screen.dart';
-import '../../presentation/auth/forgot_password_screen.dart';
-import '../../presentation/auth/force_password_change_screen.dart';
+  static String friendly(Object e) {
+    final raw = e.toString();
 
-import '../../presentation/dashboard/admin_dashboard_screen.dart';
-import '../../presentation/dashboard/supervisor_dashboard_screen.dart';
-import '../../presentation/dashboard/employee_dashboard_screen.dart';
+    if (raw.contains('already in use by another employee or supervisor')) {
+      return 'This UPI ID is already in use by another employee or supervisor. Please use a different one.';
+    }
+    if (raw.contains('Login already exists for this employee code')) {
+      return 'A login already exists for this employee.';
+    }
+    if (raw.toLowerCase().contains('duplicate key') &&
+        raw.contains('upi_id')) {
+      return 'This UPI ID is already in use. Please use a different one.';
+    }
+    if (raw.toLowerCase().contains('duplicate key') &&
+        (raw.contains('email') || raw.contains('employee_code') || raw.contains('supervisor_code'))) {
+      return 'This username/code is already taken. Please choose another.';
+    }
+    if (raw.contains('SocketException') || raw.contains('Failed host lookup')) {
+      return 'No internet connection. Please check your network and try again.';
+    }
 
-import '../../presentation/employees/employees_list_screen.dart';
-import '../../presentation/employees/employee_form_screen.dart';
-import '../../presentation/employees/employee_detail_screen.dart';
-
-import '../../presentation/supervisors/supervisors_list_screen.dart';
-
-import '../../presentation/attendance/attendance_list_screen.dart';
-import '../../presentation/attendance/attendance_entry_screen.dart';
-import '../../presentation/attendance/attendance_map_screen.dart';
-import '../../presentation/attendance/attendance_detail_screen.dart';
-
-import '../../presentation/expenses/expenses_list_screen.dart';
-import '../../presentation/expenses/expense_form_screen.dart';
-import '../../presentation/expenses/expense_detail_screen.dart';
-
-import '../../presentation/payroll/payroll_list_screen.dart';
-import '../../presentation/payroll/payroll_process_screen.dart';
-import '../../presentation/payroll/payroll_detail_screen.dart';
-
-import '../../presentation/reports/reports_screen.dart';
-import '../../presentation/settings/settings_screen.dart';
-import '../../presentation/notifications/notifications_screen.dart';
-
-import '../../presentation/profile/my_bank_details_screen.dart';
-import '../../presentation/dashboard/employee_attendance_history_screen.dart';
-
-import '../../presentation/shared/main_shell.dart';
-
-final appRouterProvider = Provider<GoRouter>((ref) {
-  final authStream = Supabase.instance.client.auth.onAuthStateChange;
-
-  return GoRouter(
-    refreshListenable: GoRouterRefreshStream(authStream),
-    initialLocation: '/login',
-
-    redirect: (context, state) {
-      final session = ref.read(authRepositoryProvider).currentSession;
-      final isLoggedIn = session != null;
-
-      final isPublicRoute = [
-        '/login',
-        '/forgot-password',
-        '/change-password',
-      ].contains(state.matchedLocation);
-
-      if (!isLoggedIn && !isPublicRoute) return '/login';
-      if (isLoggedIn &&
-          (state.matchedLocation == '/login' ||
-              state.matchedLocation == '/forgot-password')) {
-        return '/dashboard';
-      }
-
-      // Force password change check.
-      // IMPORTANT: only redirect TO /change-password using the cached profile
-      // value (AsyncValue.valueOrNull). We deliberately do NOT redirect AWAY
-      // from /change-password here â€” that responsibility belongs solely to
-      // ForcePasswordChangeScreen itself after it confirms the profile was
-      // actually updated (see force_password_change_screen.dart _save()).
-      // This avoids the double-prompt bug where a stale cached profile
-      // (still showing mustChangePassword: true during the brief
-      // invalidate/refetch window) would bounce the user back here right
-      // after they just changed their password.
-      if (isLoggedIn && state.matchedLocation != '/change-password') {
-        final profileAsync = ref.read(currentProfileProvider);
-        // Only act on a profile we're CONFIDENT about: it must have data
-        // AND not be in the middle of a refetch (isRefreshing == true means
-        // Riverpod is still serving the PREVIOUS value while a new fetch is
-        // in flight â€” acting on that stale value is what caused the
-        // "asked to change password twice" bug).
-        if (profileAsync.hasValue && !profileAsync.isRefreshing) {
-          final profile = profileAsync.value;
-          if (profile?.mustChangePassword == true) {
-            return '/change-password';
-          }
-        }
-      }
-
-      return null;
-    },
-
-    routes: [
-      GoRoute(
-        name: 'login',
-        path: '/login',
-        builder: (_, __) => const LoginScreen(),
-      ),
-      GoRoute(
-        name: 'forgot-password',
-        path: '/forgot-password',
-        builder: (_, __) => const ForgotPasswordScreen(),
-      ),
-      GoRoute(
-        name: 'change-password',
-        path: '/change-password',
-        builder: (_, __) => const ForcePasswordChangeScreen(),
-      ),
-
-      ShellRoute(
-        builder: (context, state, child) => MainShell(child: child),
-        routes: [
-          GoRoute(
-            name: 'dashboard',
-            path: '/dashboard',
-            builder: (context, state) => const DashboardRouterWidget(),
-          ),
-
-          GoRoute(
-            name: 'employees',
-            path: '/employees',
-            builder: (_, __) => const EmployeesListScreen(),
-            routes: [
-              GoRoute(
-                name: 'employee-new',
-                path: 'new',
-                builder: (_, __) => const EmployeeFormScreen(),
-              ),
-              GoRoute(
-                name: 'employee-detail',
-                path: ':id',
-                builder: (_, state) =>
-                    EmployeeDetailScreen(id: state.pathParameters['id']!),
-              ),
-              GoRoute(
-                name: 'employee-edit',
-                path: ':id/edit',
-                builder: (_, state) => EmployeeFormScreen(
-                    employeeId: state.pathParameters['id']!),
-              ),
-            ],
-          ),
-
-          GoRoute(
-            name: 'supervisors',
-            path: '/supervisors',
-            builder: (_, __) => const SupervisorsListScreen(),
-            routes: [
-              GoRoute(
-                name: 'supervisor-new',
-                path: 'new',
-                builder: (_, __) => const SupervisorFormScreen(),
-              ),
-              GoRoute(
-                name: 'supervisor-detail',
-                path: ':id',
-                builder: (_, state) =>
-                    SupervisorDetailScreen(id: state.pathParameters['id']!),
-              ),
-              GoRoute(
-                name: 'supervisor-edit',
-                path: ':id/edit',
-                builder: (_, state) => SupervisorFormScreen(
-                    supervisorId: state.pathParameters['id']!),
-              ),
-            ],
-          ),
-
-          GoRoute(
-            name: 'attendance',
-            path: '/attendance',
-            builder: (_, __) => const AttendanceListScreen(),
-            routes: [
-              GoRoute(
-                name: 'attendance-new',
-                path: 'new',
-                builder: (_, __) => const AttendanceEntryScreen(),
-              ),
-              GoRoute(
-                name: 'attendance-edit',
-                path: ':id/edit',
-                builder: (_, state) => AttendanceEntryScreen(
-                    attendanceId: state.pathParameters['id']!),
-              ),
-              GoRoute(
-                name: 'attendance-detail',
-                path: ':id/detail',
-                builder: (_, state) => AttendanceDetailScreen(
-                    attendanceId: state.pathParameters['id']!),
-              ),
-              GoRoute(
-                name: 'attendance-map',
-                path: ':id/map',
-                builder: (_, state) =>
-                    AttendanceMapScreen(attendanceId: state.pathParameters['id']!),
-              ),
-            ],
-          ),
-
-          GoRoute(
-            name: 'expenses',
-            path: '/expenses',
-            builder: (_, __) => const ExpensesListScreen(),
-            routes: [
-              GoRoute(
-                name: 'expense-new',
-                path: 'new',
-                builder: (_, __) => const ExpenseFormScreen(),
-              ),
-              GoRoute(
-                name: 'expense-detail',
-                path: ':id',
-                builder: (_, state) =>
-                    ExpenseDetailScreen(id: state.pathParameters['id']!),
-              ),
-              GoRoute(
-                name: 'expense-edit',
-                path: ':id/edit',
-                builder: (_, state) =>
-                    ExpenseFormScreen(expenseId: state.pathParameters['id']!),
-              ),
-            ],
-          ),
-
-          GoRoute(
-            name: 'payroll',
-            path: '/payroll',
-            builder: (_, __) => const PayrollListScreen(),
-            routes: [
-              GoRoute(
-                name: 'payroll-process',
-                path: 'process',
-                builder: (_, __) => const PayrollProcessScreen(),
-              ),
-              GoRoute(
-                name: 'payroll-detail',
-                path: ':id',
-                builder: (_, state) =>
-                    PayrollDetailScreen(id: state.pathParameters['id']!),
-              ),
-            ],
-          ),
-
-          GoRoute(
-            name: 'reports',
-            path: '/reports',
-            builder: (_, __) => const ReportsScreen(),
-          ),
-          GoRoute(
-            name: 'settings',
-            path: '/settings',
-            builder: (_, __) => const SettingsScreen(),
-          ),
-          GoRoute(
-            name: 'notifications',
-            path: '/notifications',
-            builder: (_, __) => const NotificationsScreen(),
-          ),
-          GoRoute(
-            name: 'myBankDetails',
-            path: '/my-bank-details',
-            builder: (_, __) => const MyBankDetailsScreen(),
-          ),
-          GoRoute(
-            name: 'employeeAttendanceHistory',
-            path: '/my-attendance-history',
-            builder: (_, state) => EmployeeAttendanceHistoryScreen(
-                employeeId: state.extra as String),
-          ),
-        ],
-      ),
-    ],
-
-    errorBuilder: (context, state) => Scaffold(
-      appBar: AppBar(title: const Text('Page Not Found')),
-      body: Center(
-          child: Text(state.error?.toString() ?? 'Unknown routing error')),
-    ),
-  );
-});
-
-class DashboardRouterWidget extends ConsumerWidget {
-  const DashboardRouterWidget({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(currentProfileProvider);
-    return profile.when(
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) =>
-          Scaffold(body: Center(child: Text('Failed to load profile: $e'))),
-      data: (profile) {
-        if (profile?.role == 'admin') return const AdminDashboardScreen();
-        if (profile?.role == 'employee') return const EmployeeDashboardScreen();
-        return const SupervisorDashboardScreen();
-      },
-    );
+    return raw
+        .replaceAll('PostgrestException(message: ', '')
+        .replaceAll('AuthException: ', '')
+        .replaceAll('Exception: ', '')
+        .split(', code:')
+        .first
+        .trim();
   }
 }
 
-class GoRouterRefreshStream extends ChangeNotifier {
-  GoRouterRefreshStream(Stream<dynamic> stream) {
-    notifyListeners();
-    _subscription =
-        stream.asBroadcastStream().listen((_) => notifyListeners());
+class DateUtils {
+  DateUtils._();
+
+  static String formatDate(DateTime date) =>
+      DateFormat(AppConstants.dateFormat).format(date);
+
+  static String formatDateTime(DateTime date) =>
+      DateFormat(AppConstants.dateTimeFormat).format(date);
+
+  static String formatMonthYear(DateTime date) =>
+      DateFormat(AppConstants.monthYearFormat).format(date);
+
+  static String formatApiDate(DateTime date) =>
+      DateFormat(AppConstants.apiDateFormat).format(date);
+
+  static DateTime parseDate(String date) =>
+      DateFormat(AppConstants.apiDateFormat).parse(date);
+
+  static String getMonthName(int month) =>
+      DateFormat('MMMM').format(DateTime(2024, month));
+
+  static List<DateTime> getDaysInMonth(int year, int month) {
+    final firstDay = DateTime(year, month, 1);
+    final lastDay = DateTime(year, month + 1, 0);
+    return List.generate(
+      lastDay.day,
+      (i) => DateTime(year, month, i + 1),
+    );
   }
 
-  late final StreamSubscription<dynamic> _subscription;
+  static bool isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
-  @override
-  void dispose() {
-    _subscription.cancel();
-    super.dispose();
+  static bool isToday(DateTime date) => isSameDay(date, DateTime.now());
+}
+
+class CurrencyUtils {
+  CurrencyUtils._();
+
+  static final _formatter = NumberFormat.currency(
+    locale: 'en_IN',
+    symbol: 'â‚¹',
+    decimalDigits: 2,
+  );
+
+  static String format(num amount) => _formatter.format(amount);
+
+  static String formatCompact(num amount) {
+    if (amount >= 100000) {
+      return 'â‚¹${(amount / 100000).toStringAsFixed(1)}L';
+    } else if (amount >= 1000) {
+      return 'â‚¹${(amount / 1000).toStringAsFixed(1)}K';
+    }
+    return 'â‚¹${amount.toStringAsFixed(0)}';
+  }
+}
+
+class StringUtils {
+  StringUtils._();
+
+  static String capitalize(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1).toLowerCase();
+
+  static String titleCase(String s) =>
+      s.split(' ').map(capitalize).join(' ');
+
+  static bool isValidEmail(String email) =>
+      RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+
+  static bool isValidMobile(String mobile) =>
+      RegExp(r'^[6-9]\d{9}$').hasMatch(mobile);
+
+  static bool isValidAadhaar(String aadhaar) =>
+      RegExp(r'^\d{12}$').hasMatch(aadhaar.replaceAll(' ', ''));
+
+  static String maskAadhaar(String aadhaar) {
+    if (aadhaar.length < 4) return aadhaar;
+    return '****-****-${aadhaar.substring(aadhaar.length - 4)}';
+  }
+}
+
+class ValidationUtils {
+  ValidationUtils._();
+
+  static String? validateRequired(String? value, [String fieldName = 'Field']) {
+    if (value == null || value.trim().isEmpty) return '$fieldName is required';
+    return null;
+  }
+
+  static String? validateEmail(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Email is required';
+    if (!StringUtils.isValidEmail(value)) return 'Enter a valid email';
+    return null;
+  }
+
+  static String? validateMobile(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    if (!StringUtils.isValidMobile(value)) return 'Enter a valid 10-digit mobile number';
+    return null;
+  }
+
+  static String? validateAmount(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Amount is required';
+    final amount = double.tryParse(value);
+    if (amount == null || amount <= 0) return 'Enter a valid amount';
+    return null;
+  }
+
+  static String? validatePassword(String? value) {
+    if (value == null || value.isEmpty) return 'Password is required';
+    if (value.length < 8) return 'Password must be at least 8 characters';
+    return null;
   }
 }
