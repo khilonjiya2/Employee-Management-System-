@@ -249,6 +249,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.people_rounded,
                   iconColor: AppColors.primary500,
                   iconBg: AppColors.primary50,
+                  onTap: () => context.push('/employees'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -259,6 +260,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.person_rounded,
                   iconColor: AppColors.secondary500,
                   iconBg: const Color(0xFFEEF2FF),
+                  onTap: () => context.push('/employees'),
                 ),
               ),
             ],
@@ -273,6 +275,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.check_circle_rounded,
                   iconColor: AppColors.success500,
                   iconBg: const Color(0xFFE8F5E9),
+                  onTap: () => context.push('/attendance'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -283,6 +286,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.cancel_rounded,
                   iconColor: AppColors.error500,
                   iconBg: const Color(0xFFFFEBEE),
+                  onTap: () => context.push('/attendance'),
                 ),
               ),
             ],
@@ -299,6 +303,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.pending_rounded,
                   iconColor: AppColors.accent500,
                   iconBg: const Color(0xFFFFF8E1),
+                  onTap: () => context.push('/expenses'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -309,6 +314,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.check_circle_rounded,
                   iconColor: AppColors.success500,
                   iconBg: const Color(0xFFE8F5E9),
+                  onTap: () => context.push('/expenses'),
                 ),
               ),
             ],
@@ -325,6 +331,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.account_balance_rounded,
                   iconColor: AppColors.primary500,
                   iconBg: AppColors.primary50,
+                  onTap: () => context.push('/payroll'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -335,6 +342,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.payments_rounded,
                   iconColor: AppColors.success500,
                   iconBg: const Color(0xFFE8F5E9),
+                  onTap: () => context.push('/payroll'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -345,6 +353,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.hourglass_bottom_rounded,
                   iconColor: AppColors.accent500,
                   iconBg: const Color(0xFFFFF8E1),
+                  onTap: () => context.push('/payroll'),
                 ),
               ),
             ],
@@ -374,6 +383,7 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final Color iconBg;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.title,
@@ -381,11 +391,15 @@ class _StatCard extends StatelessWidget {
     required this.icon,
     required this.iconColor,
     required this.iconBg,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -401,13 +415,21 @@ class _StatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: iconColor, size: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              if (onTap != null)
+                const Icon(Icons.chevron_right_rounded,
+                    size: 18, color: Color(0xFFC4C7D4)),
+            ],
           ),
           const SizedBox(height: 10),
           Text(
@@ -430,6 +452,7 @@ class _StatCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -689,6 +712,7 @@ class _SupervisorDashboardScreenState
                           icon: Icons.people_rounded,
                           iconColor: AppColors.primary500,
                           iconBg: AppColors.primary50,
+                          onTap: () => context.push('/employees'),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -703,6 +727,7 @@ class _SupervisorDashboardScreenState
                           iconBg: stats['today_submitted'] == true
                               ? const Color(0xFFE8F5E9)
                               : const Color(0xFFFFF8E1),
+                          onTap: () => context.push('/attendance'),
                         ),
                       ),
                     ],
@@ -727,20 +752,22 @@ class _SupervisorDashboardScreenState
                       Expanded(
                         child: _StatCard(
                           title: 'Pending Expenses',
-                          value: '${stats['pending_today']}',
+                          value: CurrencyUtils.formatCompact(stats['pending_today'] ?? 0),
                           icon: Icons.receipt_long_rounded,
                           iconColor: AppColors.accent500,
                           iconBg: const Color(0xFFFFF8E1),
+                          onTap: () => context.push('/expenses'),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _StatCard(
                           title: 'Approved Expenses',
-                          value: '${stats['approved_today']}',
+                          value: CurrencyUtils.formatCompact(stats['approved_today'] ?? 0),
                           icon: Icons.check_circle_rounded,
                           iconColor: AppColors.success500,
                           iconBg: const Color(0xFFE8F5E9),
+                          onTap: () => context.push('/expenses'),
                         ),
                       ),
                     ],
@@ -784,6 +811,22 @@ class _SupervisorDashboardScreenState
                     ],
                   ),
 const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                      label: const Text('Add Employee'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary600,
+                        side: const BorderSide(color: AppColors.primary400),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => context.push('/employees/new'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
@@ -846,8 +889,8 @@ void _showMyPayslips(BuildContext context) {
       return {
         'total_employees': 0,
         'today_submitted': false,
-        'pending_today': 0,
-        'approved_today': 0,
+        'pending_today': 0.0,
+        'approved_today': 0.0,
       };
     }
 
@@ -873,7 +916,7 @@ void _showMyPayslips(BuildContext context) {
     // Current-month scoped (bug #4 fix on supervisor side too — was 'today' only before)
     final pendingThisMonth = await client
         .from('expenses')
-        .select('id')
+        .select('id, amount')
         .eq('supervisor_id', supervisorId)
         .gte('expense_date', monthStart)
         .lte('expense_date', monthEnd)
@@ -881,17 +924,20 @@ void _showMyPayslips(BuildContext context) {
 
     final approvedThisMonth = await client
         .from('expenses')
-        .select('id')
+        .select('id, amount')
         .eq('supervisor_id', supervisorId)
         .gte('expense_date', monthStart)
         .lte('expense_date', monthEnd)
         .eq('status', 'approved');
 
+    double sumAmount(List rows) => rows.fold<double>(
+        0, (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0));
+
     return {
       'total_employees': (employees as List).length,
       'today_submitted': todayAtt != null,
-      'pending_today': (pendingThisMonth as List).length,
-      'approved_today': (approvedThisMonth as List).length,
+      'pending_today': sumAmount(pendingThisMonth as List),
+      'approved_today': sumAmount(approvedThisMonth as List),
     };
   }
 }
