@@ -116,7 +116,7 @@ class EmployeeRepository {
     int page = 0,
     int limit = 20,
   }) async {
-    var filterQuery = _client.from('employees').select('*, departments(name)');
+    var filterQuery = _client.from('employees').select('*, departments(name), locations(name)');
     if (status != null) filterQuery = filterQuery.eq('status', status);
     if (search != null && search.isNotEmpty) {
       filterQuery = filterQuery
@@ -132,7 +132,7 @@ class EmployeeRepository {
   Future<EmployeeModel?> getById(String id) async {
     final data = await _client
         .from('employees')
-        .select('*, departments(name)')
+        .select('*, departments(name), locations(name)')
         .eq('id', id)
         .maybeSingle();
     if (data == null) return null;
@@ -142,7 +142,7 @@ class EmployeeRepository {
   Future<EmployeeModel?> getByProfileId(String profileId) async {
     final data = await _client
         .from('employees')
-        .select('*, departments(name)')
+        .select('*, departments(name), locations(name)')
         .eq('profile_id', profileId)
         .maybeSingle();
     if (data == null) return null;
@@ -167,7 +167,7 @@ class EmployeeRepository {
     final result = await _client
         .from('employees')
         .insert(data)
-        .select('*, departments(name)')
+        .select('*, departments(name), locations(name)')
         .single();
 
     if (supervisorId != null) {
@@ -208,7 +208,7 @@ class EmployeeRepository {
         .from('employees')
         .update(data)
         .eq('id', id)
-        .select('*, departments(name)')
+        .select('*, departments(name), locations(name)')
         .single();
 
     await _client.from('supervisor_employees').delete().eq('employee_id', id);
@@ -410,6 +410,36 @@ class SupervisorRepository {
     }
   }
 
+  /// Item 3: a supervisor's assigned locations are OPTIONAL and
+  /// many-to-many. An empty list means "unrestricted" — this supervisor
+  /// can submit attendance for ANY location, which is the existing
+  /// default behavior and must be preserved.
+  Future<List<String>> getAssignedLocationIds(String supervisorId) async {
+    final rows = await _client
+        .from('supervisor_locations')
+        .select('location_id')
+        .eq('supervisor_id', supervisorId);
+    return (rows as List)
+        .map((r) => r['location_id'] as String)
+        .toList();
+  }
+
+  Future<void> setAssignedLocations(
+      String supervisorId, List<String> locationIds) async {
+    // Simplest correct approach: replace the whole set. Supervisor
+    // location lists are small (a handful of locations), so a
+    // delete-then-insert is fine and avoids diffing complexity/bugs.
+    await _client
+        .from('supervisor_locations')
+        .delete()
+        .eq('supervisor_id', supervisorId);
+    if (locationIds.isNotEmpty) {
+      await _client.from('supervisor_locations').insert(locationIds
+          .map((id) => {'supervisor_id': supervisorId, 'location_id': id})
+          .toList());
+    }
+  }
+
   Future<void> uploadPhoto(
       String supervisorId, List<int> fileBytes, String fileName) async {
     final userId = _client.auth.currentUser?.id ?? 'unknown';
@@ -437,7 +467,7 @@ class SupervisorRepository {
   Future<List<EmployeeModel>> getAssignedEmployees(String supervisorId) async {
     final data = await _client
         .from('supervisor_employees')
-        .select('employees(*, departments(name))')
+        .select('employees(*, departments(name), locations(name))')
         .eq('supervisor_id', supervisorId);
     return (data as List)
         .where((row) => row['employees'] != null)
@@ -1043,6 +1073,31 @@ class PayrollRepository {
     final absentDays = (s['absent_days'] as num?)?.toDouble() ?? 0;
     final leaveDays = (s['leave_days'] as num?)?.toDouble() ?? 0;
 
+    // Item 5: payroll can only be processed once at least one attendance
+    // day has been APPROVED for this employee this month.
+    // get_monthly_attendance_summary is assumed to only count attendance
+    // where is_approved = true (please verify this matches your RPC's
+    // actual definition — I don't have its source to confirm).
+    if (presentDays == 0 && halfDays == 0) {
+      throw Exception(
+          'Cannot process payroll: no approved attendance found for this employee in this period. At least one day must be approved first.');
+    }
+
+    // Item 5: if this employee's payroll for this month was already
+    // marked PAID, and attendance has since changed, re-processing
+    // should refresh the wage numbers but must NOT silently erase the
+    // fact that a payment was already made — that's financial data the
+    // admin needs to see in order to manually reconcile any difference.
+    final existing = await _client
+        .from('payroll')
+        .select('status, payment_status, paid_at, payment_confirmed_at, utr_reference, payment_method')
+        .eq('employee_id', employeeId)
+        .eq('payroll_month', month)
+        .eq('payroll_year', year)
+        .maybeSingle();
+    final wasAlreadyPaid =
+        existing != null && (existing['status'] == 'paid' || existing['payment_status'] == 'paid');
+
     final advances = await _client
         .from('payroll_transactions')
         .select('amount')
@@ -1069,7 +1124,16 @@ class PayrollRepository {
       'advance_deduction': totalAdvance,
       'penalty_deduction': 0,
       'bonus': 0,
-      'status': 'processed',
+      // Keep 'paid' status visible if it was already paid — re-processing
+      // updates the wage breakdown from fresh attendance but must not
+      // hide that money already changed hands at the OLD numbers. The
+      // admin should review and manually reconcile any difference.
+      'status': wasAlreadyPaid ? 'paid' : 'processed',
+      if (wasAlreadyPaid) 'payment_status': existing['payment_status'],
+      if (wasAlreadyPaid) 'paid_at': existing['paid_at'],
+      if (wasAlreadyPaid) 'payment_confirmed_at': existing['payment_confirmed_at'],
+      if (wasAlreadyPaid) 'utr_reference': existing['utr_reference'],
+      if (wasAlreadyPaid) 'payment_method': existing['payment_method'],
       'processed_by': _client.auth.currentUser?.id,
       'processed_at': DateTime.now().toIso8601String(),
     };
@@ -1314,6 +1378,44 @@ final supervisorPayrollRepositoryProvider =
 class SupervisorPayrollRepository {
   final SupabaseClient _client;
   SupervisorPayrollRepository(this._client);
+
+  /// All supervisors' payroll for a given month (admin view) — mirrors
+  /// PayrollRepository.getByMonthYear for employees.
+  Future<List<SupervisorPayrollModel>> getByMonthYear(
+      int month, int year) async {
+    final data = await _client
+        .from('supervisor_payroll')
+        .select('*, supervisors(name, supervisor_code)')
+        .eq('payroll_month', month)
+        .eq('payroll_year', year)
+        .order('created_at', ascending: false);
+    return (data as List)
+        .map((p) =>
+            SupervisorPayrollModel.fromJson(p as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Supervisors who don't yet have a payroll row for this month, so the
+  /// admin can process them (mirrors how the employee payroll screen
+  /// shows unprocessed employees).
+  Future<List<SupervisorModel>> getUnprocessedForMonth(
+      int month, int year) async {
+    final allSupervisors = await _client
+        .from('supervisors')
+        .select()
+        .eq('is_active', true);
+    final processed = await _client
+        .from('supervisor_payroll')
+        .select('supervisor_id')
+        .eq('payroll_month', month)
+        .eq('payroll_year', year);
+    final processedIds =
+        (processed as List).map((p) => p['supervisor_id'] as String).toSet();
+    return (allSupervisors as List)
+        .map((s) => SupervisorModel.fromJson(s as Map<String, dynamic>))
+        .where((s) => !processedIds.contains(s.id))
+        .toList();
+  }
 
   Future<List<SupervisorPayrollModel>> getForSupervisor(
       String supervisorId) async {
