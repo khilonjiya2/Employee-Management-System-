@@ -214,7 +214,7 @@ class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> 
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${widget.employee.employeeCode} · ${widget.employee.designation ?? "Employee"}',
+                          '${widget.employee.employeeCode} Â· ${widget.employee.designation ?? "Employee"}',
                           style: const TextStyle(
                             color: Color(0xCCFFFFFF),
                             fontFamily: 'Inter',
@@ -229,7 +229,7 @@ class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> 
             ),
             const SizedBox(height: 24),
             Text(
-              'Attendance · $monthLabel',
+              'Attendance Â· $monthLabel',
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -274,6 +274,36 @@ class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> 
                   ],
                 );
               },
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                label: const Text('View Full Attendance History'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary600,
+                  side: const BorderSide(color: AppColors.primary400),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => context.push('/my-attendance-history', extra: widget.employee.id),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.account_balance_outlined, size: 18),
+                label: const Text('My Bank Details'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary600,
+                  side: const BorderSide(color: AppColors.primary400),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => context.push('/my-bank-details'),
+              ),
             ),
             const SizedBox(height: 24),
             Text(
