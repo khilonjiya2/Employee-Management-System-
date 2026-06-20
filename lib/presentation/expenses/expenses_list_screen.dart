@@ -189,7 +189,7 @@ class _ExpenseCard extends ConsumerWidget {
                   Text(expense.expenseName, style: theme.textTheme.titleMedium, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
                   Text(
-                    '${StringUtils.capitalize(expense.category)} • ${DateFormat('dd/MM/yyyy').format(expense.expenseDate)}',
+                    '${StringUtils.capitalize(expense.category)} â€¢ ${DateFormat('dd/MM/yyyy').format(expense.expenseDate)}',
                     style: theme.textTheme.bodySmall,
                   ),
                   if (expense.supervisorName != null)
@@ -404,7 +404,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               TextFormField(
                 controller: _amountController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Amount (₹) *', prefixIcon: Icon(Icons.currency_rupee_rounded)),
+                decoration: const InputDecoration(labelText: 'Amount (â‚¹) *', prefixIcon: Icon(Icons.currency_rupee_rounded)),
                 validator: ValidationUtils.validateAmount,
               ),
               const SizedBox(height: 24),
@@ -726,7 +726,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
           Expanded(
             child: Text(
               exp.utrReference != null
-                  ? 'Paid via UPI · UTR: ${exp.utrReference}'
+                  ? 'Paid via UPI Â· UTR: ${exp.utrReference}'
                   : 'Paid via UPI',
               style: const TextStyle(color: AppColors.success700, fontFamily: 'Inter', fontWeight: FontWeight.w600),
             ),
@@ -737,6 +737,33 @@ class ExpenseDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildPayButton(BuildContext context, WidgetRef ref, ExpenseModel exp) {
+    final paymentEnabled = ref.watch(paymentModuleEnabledProvider);
+
+    if (!paymentEnabled) {
+      return ElevatedButton.icon(
+        icon: const Icon(Icons.check_rounded, size: 18),
+        label: const Text('Mark as Paid'),
+        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary500),
+        onPressed: () async {
+          try {
+            await ref.read(expenseRepositoryProvider).update(exp.id, {
+              'payment_status': 'paid',
+              'payment_method': 'cash',
+              'payment_confirmed_at': DateTime.now().toIso8601String(),
+              'payment_confirmed_by': ref.read(supabaseProvider).auth.currentUser?.id,
+            });
+            ref.invalidate(expensesProvider);
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(ErrorUtils.friendly(e)), backgroundColor: AppColors.error500),
+              );
+            }
+          }
+        },
+      );
+    }
+
     return ElevatedButton.icon(
       icon: const Icon(Icons.account_balance_wallet_rounded, size: 18),
       label: Text('Pay ${CurrencyUtils.format(exp.amount)} via UPI'),
@@ -928,7 +955,7 @@ class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 32),
                         child: Text(
-                          'If this persists, confirm the storage bucket is set to Public in Supabase Dashboard → Storage.',
+                          'If this persists, confirm the storage bucket is set to Public in Supabase Dashboard â†’ Storage.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white38, fontSize: 11),
                         ),
@@ -959,7 +986,7 @@ class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
   }
 }
 
-/// ─────────────────────── SUPERVISOR → MONTH DRILLDOWN (bug #9) ───────────────────────
+/// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ SUPERVISOR â†’ MONTH DRILLDOWN (bug #9) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ExpenseSupervisorDrilldownScreen extends ConsumerStatefulWidget {
   const ExpenseSupervisorDrilldownScreen({super.key});
@@ -1046,7 +1073,7 @@ class _ExpenseSupervisorDrilldownScreenState extends ConsumerState<ExpenseSuperv
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(supervisorName, style: Theme.of(context).textTheme.titleMedium),
-                              Text('${expenses.length} expenses${pendingCount > 0 ? " · $pendingCount pending" : ""}',
+                              Text('${expenses.length} expenses${pendingCount > 0 ? " Â· $pendingCount pending" : ""}',
                                   style: Theme.of(context).textTheme.bodySmall),
                             ],
                           ),
@@ -1213,7 +1240,7 @@ class ExpenseMonthListScreen extends StatelessWidget {
                             children: [
                               Text(exp.expenseName, style: Theme.of(context).textTheme.titleSmall),
                               Text(
-                                '${StringUtils.capitalize(exp.category)} • ${DateFormat('dd/MM/yyyy').format(exp.expenseDate)}',
+                                '${StringUtils.capitalize(exp.category)} â€¢ ${DateFormat('dd/MM/yyyy').format(exp.expenseDate)}',
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ],
