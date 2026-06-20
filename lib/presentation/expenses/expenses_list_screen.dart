@@ -415,6 +415,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 icon: Icons.attach_file_rounded,
                 onTap: () => _pickFiles(isReceipt: true),
                 attached: _receipt != null,
+                onCancel: _receipt != null ? () => setState(() => _receipt = null) : null,
               ),
               const SizedBox(height: 16),
               Text('Additional Attachments', style: theme.textTheme.titleMedium),
@@ -439,7 +440,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     );
   }
 
-  Widget _buildAttachmentButton({required String label, required IconData icon, required VoidCallback onTap, bool attached = false}) {
+  Widget _buildAttachmentButton({required String label, required IconData icon, required VoidCallback onTap, bool attached = false, VoidCallback? onCancel}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
@@ -456,7 +457,17 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
             Icon(icon, size: 18, color: attached ? AppColors.success600 : AppColors.secondary500),
             const SizedBox(width: 8),
             Expanded(child: Text(label, style: TextStyle(color: attached ? AppColors.success700 : AppColors.secondary600, fontSize: 14, fontFamily: 'Inter'))),
-            if (attached) const Icon(Icons.check_circle_rounded, color: AppColors.success500, size: 18),
+            if (attached && onCancel != null)
+              InkWell(
+                onTap: onCancel,
+                borderRadius: BorderRadius.circular(12),
+                child: const Padding(
+                  padding: EdgeInsets.all(2),
+                  child: Icon(Icons.cancel_rounded, color: AppColors.error500, size: 20),
+                ),
+              )
+            else if (attached)
+              const Icon(Icons.check_circle_rounded, color: AppColors.success500, size: 18),
           ],
         ),
       ),
