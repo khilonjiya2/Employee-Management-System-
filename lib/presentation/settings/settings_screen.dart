@@ -288,6 +288,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+void _showPaymentModuleSettings(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _PaymentModuleSheet(ref: ref),
+    );
+  }
+
   void _showChangePassword(BuildContext context, WidgetRef ref) {
     final newController = TextEditingController();
     final confirmController = TextEditingController();
@@ -714,7 +724,7 @@ class _DepartmentsManagerState extends State<_DepartmentsManager> {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
-    // Close using the dialog's own context BEFORE any async work — same
+    // Close using the dialog's own context BEFORE any async work â€” same
     // fix pattern as Locations (see _LocationsManagerState._addLocation).
     Navigator.of(dialogContext).pop();
 
@@ -839,6 +849,76 @@ class _DepartmentsManagerState extends State<_DepartmentsManager> {
                     ),
         ),
       ],
+    );
+  }
+}
+
+
+class _PaymentModuleSheet extends StatefulWidget {
+  final WidgetRef ref;
+  const _PaymentModuleSheet({required this.ref});
+
+  @override
+  State<_PaymentModuleSheet> createState() => _PaymentModuleSheetState();
+}
+
+class _PaymentModuleSheetState extends State<_PaymentModuleSheet> {
+  bool? _enabled;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _enabled = widget.ref.read(paymentModuleEnabledProvider);
+  }
+
+  Future<void> _toggle(bool value) async {
+    setState(() { _enabled = value; _isSaving = true; });
+    try {
+      final profile = widget.ref.read(currentProfileProvider).valueOrNull;
+      if (profile?.companyId == null) return;
+      await widget.ref.read(supabaseProvider)
+          .from('companies')
+          .update({'payment_module_enabled': value})
+          .eq('id', profile!.companyId!);
+      widget.ref.invalidate(companyProvider);
+    } catch (e) {
+      setState(() => _enabled = !value); // revert
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error500));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Payment Module', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          const Text(
+            'When enabled, admins can pay employee salaries and supervisor expenses directly via UPI from within the app.',
+          ),
+          const SizedBox(height: 24),
+          SwitchListTile(
+            title: const Text('UPI Payment Module'),
+            subtitle: Text(_enabled == true
+                ? 'Pay via UPI is active for this company'
+                : 'Only Mark as Paid is available'),
+            value: _enabled ?? false,
+            onChanged: _isSaving ? null : _toggle,
+            activeColor: AppColors.success500,
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
     );
   }
 }
