@@ -251,6 +251,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => _showManageLocations(context, ref),
             ),
+            ListTile(
+              leading: const Icon(Icons.apartment_outlined),
+              title: const Text('Manage Departments'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => _showManageDepartments(context, ref),
+            ),
           ],
 ListTile(
               leading: const Icon(Icons.payment_outlined),
@@ -438,6 +444,21 @@ void _showPaymentModuleSettings(BuildContext context, WidgetRef ref) {
         initialChildSize: 0.75,
         expand: false,
         builder: (ctx, controller) => _LocationsManager(
+            scrollController: controller, ref: ref),
+      ),
+    );
+  }
+
+  void _showManageDepartments(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        expand: false,
+        builder: (ctx, controller) => _DepartmentsManager(
             scrollController: controller, ref: ref),
       ),
     );
@@ -649,6 +670,192 @@ class _SectionTitle extends StatelessWidget {
             .labelLarge
             ?.copyWith(color: AppColors.primary500),
       ),
+    );
+  }
+}
+
+class _DepartmentsManager extends StatefulWidget {
+  final ScrollController scrollController;
+  final WidgetRef ref;
+  const _DepartmentsManager(
+      {required this.scrollController, required this.ref});
+
+  @override
+  State<_DepartmentsManager> createState() => _DepartmentsManagerState();
+}
+
+class _DepartmentsManagerState extends State<_DepartmentsManager> {
+  List<Map<String, dynamic>> _departments = [];
+  bool _isLoading = true;
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDepartments();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadDepartments() async {
+    try {
+      final data = await widget.ref
+          .read(supabaseProvider)
+          .from('departments')
+          .select()
+          .order('name');
+      setState(() {
+        _departments = (data as List).cast<Map<String, dynamic>>();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleDepartment(String id, bool currentActive) async {
+    await widget.ref
+        .read(supabaseProvider)
+        .from('departments')
+        .update({'is_active': !currentActive}).eq('id', id);
+    _loadDepartments();
+  }
+
+  Future<void> _addDepartment(BuildContext dialogContext) async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+
+    // Close using the dialog's own context BEFORE any async work — same
+    // fix pattern as Locations (see _LocationsManagerState._addLocation).
+    Navigator.of(dialogContext).pop();
+
+    final profile = widget.ref.read(currentProfileProvider).valueOrNull;
+    try {
+      await widget.ref.read(supabaseProvider).from('departments').insert({
+        'name': name,
+        'description': _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
+        'is_active': true,
+        'company_id': profile?.companyId,
+      });
+      _nameController.clear();
+      _descriptionController.clear();
+      if (mounted) _loadDepartments();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error adding department: $e'),
+              backgroundColor: AppColors.error500),
+        );
+      }
+    }
+  }
+
+  void _showAddDepartment() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Add Department'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Department Name *'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(labelText: 'Description'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => _addDepartment(dialogContext),
+              child: const Text('Add')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Text('Manage Departments',
+                  style: Theme.of(context).textTheme.titleLarge),
+              const Spacer(),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('Add'),
+                style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(80, 36)),
+                onPressed: _showAddDepartment,
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _departments.isEmpty
+                  ? const Center(child: Text('No departments found'))
+                  : ListView.separated(
+                      controller: widget.scrollController,
+                      itemCount: _departments.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final dept = _departments[i];
+                        final isActive = dept['is_active'] as bool? ?? true;
+                        return ListTile(
+                          leading: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: isActive
+                                  ? AppColors.success50
+                                  : AppColors.secondary100,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.apartment_rounded,
+                                color: isActive
+                                    ? AppColors.success600
+                                    : AppColors.secondary400,
+                                size: 20),
+                          ),
+                          title: Text(dept['name'] as String? ?? ''),
+                          subtitle: dept['description'] != null
+                              ? Text(dept['description'] as String,
+                                  style: const TextStyle(fontSize: 12))
+                              : null,
+                          trailing: Switch(
+                            value: isActive,
+                            onChanged: (_) => _toggleDepartment(
+                                dept['id'] as String, isActive),
+                            activeColor: AppColors.success500,
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
     );
   }
 }
