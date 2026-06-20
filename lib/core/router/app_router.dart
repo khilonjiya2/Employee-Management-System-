@@ -75,8 +75,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // after they just changed their password.
       if (isLoggedIn && state.matchedLocation != '/change-password') {
         final profileAsync = ref.read(currentProfileProvider);
-        // Only act on a profile we're CONFIDENT about (has data, not loading/stale).
-        if (profileAsync.hasValue) {
+        // Only act on a profile we're CONFIDENT about: it must have data
+        // AND not be in the middle of a refetch (isRefreshing == true means
+        // Riverpod is still serving the PREVIOUS value while a new fetch is
+        // in flight — acting on that stale value is what caused the
+        // "asked to change password twice" bug).
+        if (profileAsync.hasValue && !profileAsync.isRefreshing) {
           final profile = profileAsync.value;
           if (profile?.mustChangePassword == true) {
             return '/change-password';
