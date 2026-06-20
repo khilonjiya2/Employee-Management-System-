@@ -685,8 +685,8 @@ class _EmployeeAttendanceRow extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: status ==
                                 AttendanceStatus.present
-                            ? Colors.blue
-                            : Colors.blue.withOpacity(0.10),
+                            ? Colors.green
+                            : Colors.green.withOpacity(0.10),
                         borderRadius:
                             BorderRadius.circular(8),
                       ),
@@ -696,7 +696,7 @@ class _EmployeeAttendanceRow extends StatelessWidget {
                           color: status ==
                                   AttendanceStatus.present
                               ? Colors.white
-                              : Colors.blue,
+                              : Colors.green,
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
                         ),
