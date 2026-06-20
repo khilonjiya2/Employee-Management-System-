@@ -29,6 +29,12 @@ final _departmentsProvider = FutureProvider.autoDispose<List<DepartmentModel>>((
   return (data as List).map((d) => DepartmentModel.fromJson(d as Map<String, dynamic>)).toList();
 });
 
+final _employeeLocationsProvider = FutureProvider.autoDispose<List<LocationModel>>((ref) async {
+  final client = ref.watch(supabaseProvider);
+  final data = await client.from('locations').select().eq('is_active', true).order('name');
+  return (data as List).map((d) => LocationModel.fromJson(d as Map<String, dynamic>)).toList();
+});
+
 class EmployeeFormScreen extends ConsumerStatefulWidget {
   final String? employeeId;
   const EmployeeFormScreen({super.key, this.employeeId});
@@ -52,6 +58,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
 
   DateTime _joiningDate = DateTime.now();
   String? _departmentId;
+  String? _locationId;
   String? _supervisorId;
   String _status = 'active';
   File? _photoFile;
@@ -90,6 +97,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
 
     _joiningDate = employee.joiningDate;
     _departmentId = employee.departmentId;
+    _locationId = employee.locationId;
     _status = employee.status;
     _existingPhotoUrl = employee.employeePhotoUrl;
     _showBankDetails = (employee.upiId?.isNotEmpty ?? false) ||
@@ -144,6 +152,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
         'daily_wage_rate': double.parse(_wageController.text),
         'joining_date': DateFormat('yyyy-MM-dd').format(_joiningDate),
         'department_id': _departmentId,
+        'location_id': _locationId,
         'supervisor_id': _supervisorId,
         'status': _status,
         'upi_id': _upiController.text.trim().isEmpty ? null : _upiController.text.trim(),
@@ -185,6 +194,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
   @override
   Widget build(BuildContext context) {
     final departments = ref.watch(_departmentsProvider);
+    final locations = ref.watch(_employeeLocationsProvider);
     final supervisors = ref.watch(_supervisorsProvider);
     final theme = Theme.of(context);
 
@@ -248,6 +258,17 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
                     decoration: const InputDecoration(labelText: 'Department', prefixIcon: Icon(Icons.business_outlined)),
                     items: depts.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name))).toList(),
                     onChanged: (v) => setState(() => _departmentId = v),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                locations.when(
+                  loading: () => const LinearProgressIndicator(),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (locs) => DropdownButtonFormField<String>(
+                    value: _locationId,
+                    decoration: const InputDecoration(labelText: 'Location', prefixIcon: Icon(Icons.location_on_outlined)),
+                    items: locs.map((l) => DropdownMenuItem(value: l.id, child: Text(l.name))).toList(),
+                    onChanged: (v) => setState(() => _locationId = v),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -813,6 +834,11 @@ class _EmployeeDetailBodyState extends ConsumerState<_EmployeeDetailBody> {
                     icon: Icons.business_outlined,
                     label: 'Department',
                     value: employee.departmentName!),
+              if (employee.locationName != null)
+                _DetailRow(
+                    icon: Icons.location_on_outlined,
+                    label: 'Location',
+                    value: employee.locationName!),
               _DetailRow(
                   icon: Icons.currency_rupee_rounded,
                   label: 'Daily Wage',
