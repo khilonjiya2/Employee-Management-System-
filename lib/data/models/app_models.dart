@@ -380,6 +380,7 @@ class AttendanceDetailModel extends Equatable {
   final double overtimeHours;
   final String? remarks;
   final DateTime createdAt;
+  final DateTime? attendanceDate;
 
   const AttendanceDetailModel({
     required this.id,
@@ -391,6 +392,7 @@ class AttendanceDetailModel extends Equatable {
     required this.overtimeHours,
     this.remarks,
     required this.createdAt,
+    this.attendanceDate,
   });
 
   factory AttendanceDetailModel.fromJson(Map<String, dynamic> json) => AttendanceDetailModel(
@@ -403,6 +405,9 @@ class AttendanceDetailModel extends Equatable {
     overtimeHours: (json['overtime_hours'] as num?)?.toDouble() ?? 0,
     remarks: json['remarks'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
+    attendanceDate: json['attendance'] != null && (json['attendance'] as Map)['attendance_date'] != null
+        ? DateTime.parse((json['attendance'] as Map)['attendance_date'] as String)
+        : null,
   );
 
   Map<String, dynamic> toJson() => {
@@ -790,7 +795,7 @@ class NotificationModel extends Equatable {
 }
 
 
-// Add to app_models.dart — append at bottom
+// Add to app_models.dart â€” append at bottom
 
 class CompanyModel extends Equatable {
   final String id;
@@ -838,7 +843,7 @@ class CompanyModel extends Equatable {
         phone: json['phone'] as String?,
         email: json['email'] as String?,
         gstin: json['gstin'] as String?,
-        currencySymbol: json['currency_symbol'] as String? ?? '₹',
+        currencySymbol: json['currency_symbol'] as String? ?? 'â‚¹',
         timezone: json['timezone'] as String? ?? 'Asia/Kolkata',
         paymentModuleEnabled: json['payment_module_enabled'] as bool? ?? false,
         createdAt: DateTime.parse(json['created_at'] as String),
