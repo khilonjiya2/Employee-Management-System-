@@ -224,7 +224,7 @@ void dispose() {
             e.name.toLowerCase().contains(query.toLowerCase());
         // Only show employees linked to the selected location. If an
         // employee has no location set, we still show them (treat as
-        // unassigned/shared) rather than silently hiding them — admins
+        // unassigned/shared) rather than silently hiding them â€” admins
         // can set employees.location_id to tighten this further.
         final matchesLocation = _selectedLocationId == null ||
             e.locationId == null ||
@@ -265,7 +265,7 @@ void dispose() {
 
       // Items 4 & 7: only ONE attendance record may exist per
       // (location, date), regardless of which supervisor submits it.
-      // If one already exists, block creating a duplicate — the
+      // If one already exists, block creating a duplicate â€” the
       // supervisor who owns it must EDIT it instead (and any other
       // supervisor is blocked outright while it's pending/approved).
       if (!isEditing && _selectedLocationId != null) {
