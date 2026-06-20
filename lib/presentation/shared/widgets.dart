@@ -641,7 +641,7 @@ class _PaymentConfirmDialogState extends State<_PaymentConfirmDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Did the UPI payment of ₹${widget.amount.toStringAsFixed(2)} to ${widget.payeeName} go through?',
+            'Did the UPI payment of â‚¹${widget.amount.toStringAsFixed(2)} to ${widget.payeeName} go through?',
           ),
           const SizedBox(height: 16),
           TextField(
@@ -667,4 +667,3 @@ class _PaymentConfirmDialogState extends State<_PaymentConfirmDialog> {
     );
   }
 }
-
