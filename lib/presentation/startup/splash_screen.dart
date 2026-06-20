@@ -28,15 +28,12 @@ class _SplashScreenState extends State<SplashScreen> {
         _error = null;
       });
 
-      final stopwatch = Stopwatch()..start();
-
       // Minimum splash duration
       await Future.delayed(const Duration(milliseconds: 1000));
 
       if (!mounted) return;
 
-      final session =
-          Supabase.instance.client.auth.currentSession;
+      final session = Supabase.instance.client.auth.currentSession;
 
       if (session == null) {
         context.go('/login');
@@ -63,16 +60,24 @@ class _SplashScreenState extends State<SplashScreen> {
       return Scaffold(
         body: Center(
           child: Column(
-            mainAxisAlignment:
-                MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const FlutterLogo(size: 90),
+              Container(
+                width: 110,
+                height: 110,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  fit: BoxFit.cover,
+                ),
+              ),
               const SizedBox(height: 24),
               Text(
                 'AttendPay',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineMedium,
+                style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 24),
               const CircularProgressIndicator(),
@@ -86,11 +91,9 @@ class _SplashScreenState extends State<SplashScreen> {
       body: SafeArea(
         child: Center(
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(
                   Icons.error_outline_rounded,
@@ -106,8 +109,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  _error ??
-                      'An unexpected error occurred.',
+                  _error ?? 'An unexpected error occurred.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
