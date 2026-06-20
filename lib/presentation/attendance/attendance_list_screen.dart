@@ -179,12 +179,12 @@ class _AttendanceListScreenState extends ConsumerState<AttendanceListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Attendance'),
+        title: Text(profile?.role == 'supervisor' ? 'Overview' : 'Attendance'),
         actions: [
           Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.filter_alt_outlined),
+                icon: const Icon(Icons.calendar_month_outlined),
                 onPressed: _showFilterSheet,
               ),
               if (isFiltered)
@@ -204,7 +204,8 @@ class _AttendanceListScreenState extends ConsumerState<AttendanceListScreen> {
           ),
           if (profile?.isSupervisor == true)
             IconButton(
-                icon: const Icon(Icons.add_rounded),
+                icon: const Icon(Icons.event_available_rounded),
+                tooltip: 'Mark Attendance',
                 onPressed: () => context.push('/attendance/new')),
         ],
       ),
@@ -273,13 +274,7 @@ class _AttendanceListScreenState extends ConsumerState<AttendanceListScreen> {
           ),
         ],
       ),
-      floatingActionButton: profile?.isSupervisor == true
-          ? FloatingActionButton.extended(
-              onPressed: () => context.push('/attendance/new'),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Mark Attendance'),
-            )
-          : null,
+      floatingActionButton: null,
     );
   }
 }
