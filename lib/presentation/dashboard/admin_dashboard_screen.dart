@@ -125,7 +125,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         ),
         data: (data) => RefreshIndicator(
           // Awaits the actual refetch so the spinner stays until fresh data
-          // arrives — this is the real-time/refresh fix for bug #4.
+          // arrives â€” this is the real-time/refresh fix for bug #4.
           onRefresh: () async {
             ref.invalidate(dashboardStatsProvider);
             ref.invalidate(_unreadNotificationCountProvider);
@@ -292,7 +292,7 @@ class _DashboardBody extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          _sectionLabel("Expense Overview · $monthLabel"),
+          _sectionLabel("Expense Overview Â· $monthLabel"),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -320,7 +320,7 @@ class _DashboardBody extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          _sectionLabel("Payroll Overview · $monthLabel"),
+          _sectionLabel("Payroll Overview Â· $monthLabel"),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -432,13 +432,18 @@ class _StatCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              fontFamily: 'Inter',
-              color: Color(0xFF1A1A2E),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Inter',
+                color: Color(0xFF1A1A2E),
+              ),
             ),
           ),
           const SizedBox(height: 2),
@@ -719,7 +724,7 @@ class _SupervisorDashboardScreenState
                       Expanded(
                         child: _StatCard(
                           title: 'Attendance',
-                          value: stats['today_submitted'] == true ? 'Done ✓' : 'Pending',
+                          value: stats['today_submitted'] == true ? 'Done âœ“' : 'Pending',
                           icon: Icons.calendar_today_rounded,
                           iconColor: stats['today_submitted'] == true
                               ? AppColors.success500
@@ -736,7 +741,7 @@ class _SupervisorDashboardScreenState
                   const SizedBox(height: 12),
 
                   Text(
-                    "Expenses · $monthLabel",
+                    "Expenses Â· $monthLabel",
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -842,6 +847,22 @@ const SizedBox(height: 12),
                       onPressed: () => _showMyPayslips(context),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.account_balance_outlined, size: 18),
+                      label: const Text('My Bank Details'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary600,
+                        side: const BorderSide(color: AppColors.primary400),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => context.push('/my-bank-details'),
+                    ),
+                  ),
 
                   const SizedBox(height: 100),
                 ],
@@ -913,7 +934,7 @@ void _showMyPayslips(BuildContext context) {
         .eq('attendance_date', today)
         .maybeSingle();
 
-    // Current-month scoped (bug #4 fix on supervisor side too — was 'today' only before)
+    // Current-month scoped (bug #4 fix on supervisor side too â€” was 'today' only before)
     final pendingThisMonth = await client
         .from('expenses')
         .select('id, amount')
