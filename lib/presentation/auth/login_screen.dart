@@ -113,29 +113,69 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget _buildHeader(ThemeData theme) {
     return Column(
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: Image.asset(
-            'assets/images/logo.png',
-            width: 200,
-            height: 200,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stack) => Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                color: AppColors.primary100,
-                borderRadius: BorderRadius.circular(24),
+        Container(
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.white,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary500.withOpacity(0.18),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
-              child: const Icon(Icons.business_center_rounded,
-                  size: 80, color: AppColors.primary500),
+            ],
+          ),
+          child: ClipOval(
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 120,
+              height: 120,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stack) => Container(
+                width: 120,
+                height: 120,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary100,
+                ),
+                child: const Icon(Icons.business_center_rounded,
+                    size: 48, color: AppColors.primary500),
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 20),
-        Text('Employee Management System',
+        const SizedBox(height: 24),
+        ShaderMask(
+          shaderCallback: (bounds) => LinearGradient(
+            colors: [AppColors.primary600, AppColors.primary400],
+          ).createShader(bounds),
+          child: const Text(
+            'Employee Management',
             textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall),
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Inter',
+              color: Colors.white,
+              letterSpacing: -0.5,
+              height: 1.1,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'SYSTEM',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            fontFamily: 'Inter',
+            color: AppColors.secondary400,
+            letterSpacing: 4,
+          ),
+        ),
       ],
     );
   }
@@ -234,13 +274,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             strokeWidth: 2, color: Colors.white))
                     : const Text('Sign In'),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: _isLoading
-                  ? null
-                  : () => context.push('/forgot-password'),
-              child: const Text('Forgot Password?'),
             ),
           ],
         ),
