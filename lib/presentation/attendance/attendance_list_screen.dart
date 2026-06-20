@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
@@ -399,6 +400,14 @@ class _AttendanceCard extends ConsumerWidget {
                       style: theme.textTheme.labelSmall
                           ?.copyWith(color: AppColors.secondary400)),
                   const Spacer(),
+                  if (attendance.latitude != null &&
+                      attendance.longitude != null)
+                    TextButton.icon(
+                      icon: const Icon(Icons.location_on_outlined, size: 14),
+                      label: const Text('View Location'),
+                      onPressed: () => _viewLocation(
+                          context, attendance.latitude!, attendance.longitude!),
+                    ),
                   if (isSupervisor)
                     TextButton.icon(
                       icon: const Icon(Icons.edit_outlined, size: 14),
@@ -420,6 +429,27 @@ class _AttendanceCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _viewLocation(
+      BuildContext context, double lat, double lng) async {
+    final uri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    try {
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not open maps app'),
+            backgroundColor: AppColors.error500));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not open maps app'),
+            backgroundColor: AppColors.error500));
+      }
+    }
   }
 
   Future<void> _approve(BuildContext context, WidgetRef ref, String id) async {
