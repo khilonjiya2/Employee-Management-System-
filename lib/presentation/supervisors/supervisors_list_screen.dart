@@ -37,7 +37,7 @@ class SupervisorsNotifier
   void refresh() => load();
 }
 
-// ─── Supervisor Payroll providers ─────────────────────────────────────────────
+// â”€â”€â”€ Supervisor Payroll providers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 final _supervisorPayrollProvider = FutureProvider.autoDispose
     .family<List<SupervisorPayrollModel>, String>((ref, supervisorId) {
@@ -46,7 +46,7 @@ final _supervisorPayrollProvider = FutureProvider.autoDispose
       .getForSupervisor(supervisorId);
 });
 
-// ─── List Screen ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ List Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SupervisorsListScreen extends ConsumerStatefulWidget {
   const SupervisorsListScreen({super.key});
@@ -205,7 +205,7 @@ class _SupervisorCard extends StatelessWidget {
   }
 }
 
-// ─── Form Screen ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Form Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SupervisorFormScreen extends ConsumerStatefulWidget {
   final String? supervisorId;
@@ -232,14 +232,43 @@ class _SupervisorFormScreenState
   bool _showBankDetails = false;
   File? _photoFile;
   String? _existingPhotoUrl;
+  List<String> _selectedLocationIds = [];
+  List<LocationModel> _availableLocations = [];
 
   bool get isEditing => widget.supervisorId != null;
 
   @override
   void initState() {
     super.initState();
+    _loadLocations();
     if (isEditing) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadSupervisor());
+    }
+  }
+
+  Future<void> _loadLocations() async {
+    try {
+      final data = await ref
+          .read(supabaseProvider)
+          .from('locations')
+          .select()
+          .eq('is_active', true)
+          .order('name');
+      if (mounted) {
+        setState(() {
+          _availableLocations = (data as List)
+              .map((d) => LocationModel.fromJson(d as Map<String, dynamic>))
+              .toList();
+        });
+      }
+    } catch (_) {}
+    if (isEditing) {
+      try {
+        final ids = await ref
+            .read(supervisorRepositoryProvider)
+            .getAssignedLocationIds(widget.supervisorId!);
+        if (mounted) setState(() => _selectedLocationIds = ids);
+      } catch (_) {}
     }
   }
 
@@ -292,12 +321,21 @@ class _SupervisorFormScreenState
       final username = _usernameController.text.trim().toUpperCase();
       final email = '$username@ems.com';
 
+      final selectedLocationNames = _availableLocations
+          .where((l) => _selectedLocationIds.contains(l.id))
+          .map((l) => l.name)
+          .join(', ');
+
       final data = {
         'name': _nameController.text.trim(),
         'email': email,
         'mobile': _mobileController.text.trim().isEmpty
             ? null
             : _mobileController.text.trim(),
+        // Kept in sync as a readable summary for legacy displays/reports.
+        // Source of truth for assignment logic is supervisor_locations.
+        'assigned_area':
+            selectedLocationNames.isEmpty ? null : selectedLocationNames,
         'is_active': _isActive,
         'upi_id': _upiController.text.trim().isEmpty
             ? null
@@ -321,6 +359,10 @@ class _SupervisorFormScreenState
       } else {
         supervisor = await repo.create(data, 'Abcd@123');
       }
+
+      // Item 3: sync the many-to-many assignment. Empty selection is
+      // valid and means "unrestricted" (can submit for any location).
+      await repo.setAssignedLocations(supervisor.id, _selectedLocationIds);
 
       if (_photoFile != null) {
         final bytes = await _photoFile!.readAsBytes();
@@ -420,7 +462,7 @@ class _SupervisorFormScreenState
               TextFormField(
                 controller: _usernameController,
                 // See login_screen.dart for why we don't force
-                // TextCapitalization here — value is uppercased
+                // TextCapitalization here â€” value is uppercased
                 // programmatically before use (line ~295).
                 readOnly: isEditing,
                 decoration: InputDecoration(
@@ -448,11 +490,45 @@ class _SupervisorFormScreenState
                 validator: ValidationUtils.validateMobile,
               ),
               const SizedBox(height: 16),
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Assigned Location(s) â€” optional',
+                  prefixIcon: Icon(Icons.map_outlined),
+                  helperText:
+                      'Leave empty to allow attendance submission for ANY location',
+                  helperMaxLines: 2,
+                ),
+                child: _availableLocations.isEmpty
+                    ? const Text('No locations added yet',
+                        style: TextStyle(color: Colors.grey))
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: _availableLocations.map((loc) {
+                          final selected =
+                              _selectedLocationIds.contains(loc.id);
+                          return FilterChip(
+                            label: Text(loc.name),
+                            selected: selected,
+                            onSelected: (val) {
+                              setState(() {
+                                if (val) {
+                                  _selectedLocationIds.add(loc.id);
+                                } else {
+                                  _selectedLocationIds.remove(loc.id);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+              ),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _salaryController,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Monthly Salary (₹)',
+                  labelText: 'Monthly Salary (â‚¹)',
                   prefixIcon:
                       Icon(Icons.account_balance_wallet_outlined),
                   helperText:
@@ -600,7 +676,7 @@ class _SupervisorFormScreenState
   }
 }
 
-// ─── Detail Screen ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Detail Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SupervisorDetailScreen extends ConsumerWidget {
   final String id;
@@ -815,7 +891,7 @@ class SupervisorDetailScreen extends ConsumerWidget {
   }
 }
 
-// ─── Supervisor Salary Screen (admin view) ───────────────────────────────────
+// â”€â”€â”€ Supervisor Salary Screen (admin view) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SupervisorSalaryScreen extends ConsumerStatefulWidget {
   final SupervisorModel supervisor;
@@ -841,7 +917,7 @@ class _SupervisorSalaryScreenState
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-            'Process Salary — ${DateFormat('MMMM yyyy').format(DateTime.now())}'),
+            'Process Salary â€” ${DateFormat('MMMM yyyy').format(DateTime.now())}'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -854,14 +930,14 @@ class _SupervisorSalaryScreenState
               TextField(
                 controller: bonusCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Bonus (₹)'),
+                decoration: const InputDecoration(labelText: 'Bonus (â‚¹)'),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: deductionCtrl,
                 keyboardType: TextInputType.number,
                 decoration:
-                    const InputDecoration(labelText: 'Deduction (₹)'),
+                    const InputDecoration(labelText: 'Deduction (â‚¹)'),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -922,7 +998,7 @@ class _SupervisorSalaryScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.supervisor.name} — Salary'),
+        title: Text('${widget.supervisor.name} â€” Salary'),
         actions: [
           TextButton.icon(
             icon: const Icon(Icons.add_rounded),
