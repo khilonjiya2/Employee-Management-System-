@@ -504,12 +504,40 @@ class UpiPaymentHelper {
           referenceNote: referenceNote,
         );
 
+    Uri? parsedUri;
+    try {
+      parsedUri = Uri.parse(uri);
+    } catch (_) {
+      parsedUri = null;
+    }
+
+    if (parsedUri == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This UPI ID looks invalid. Please check it and try again.'),
+            backgroundColor: AppColors.error500,
+          ),
+        );
+      }
+      return;
+    }
+
     bool launched = false;
     try {
-      launched = await launchUrl(
-        Uri.parse(uri),
-        mode: LaunchMode.externalApplication,
-      );
+      // Pre-check avoids relying solely on launchUrl's internal exception
+      // handling, which on some Android/url_launcher versions can surface
+      // a platform exception instead of a clean `false` when there is no
+      // app registered to handle the `upi://` scheme.
+      final canLaunch = await canLaunchUrl(parsedUri);
+      if (canLaunch) {
+        launched = await launchUrl(
+          parsedUri,
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        launched = false;
+      }
     } catch (_) {
       launched = false;
     }
@@ -518,7 +546,7 @@ class UpiPaymentHelper {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Could not open a UPI app. Is one installed?'),
+            content: Text('No UPI app found on this device. Install GPay, PhonePe, or Paytm to pay directly, or use "Mark Paid" after paying manually.'),
             backgroundColor: AppColors.error500,
           ),
         );
