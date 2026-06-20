@@ -232,43 +232,14 @@ class _SupervisorFormScreenState
   bool _showBankDetails = false;
   File? _photoFile;
   String? _existingPhotoUrl;
-  List<String> _selectedLocationIds = [];
-  List<LocationModel> _availableLocations = [];
 
   bool get isEditing => widget.supervisorId != null;
 
   @override
   void initState() {
     super.initState();
-    _loadLocations();
     if (isEditing) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadSupervisor());
-    }
-  }
-
-  Future<void> _loadLocations() async {
-    try {
-      final data = await ref
-          .read(supabaseProvider)
-          .from('locations')
-          .select()
-          .eq('is_active', true)
-          .order('name');
-      if (mounted) {
-        setState(() {
-          _availableLocations = (data as List)
-              .map((d) => LocationModel.fromJson(d as Map<String, dynamic>))
-              .toList();
-        });
-      }
-    } catch (_) {}
-    if (isEditing) {
-      try {
-        final ids = await ref
-            .read(supervisorRepositoryProvider)
-            .getAssignedLocationIds(widget.supervisorId!);
-        if (mounted) setState(() => _selectedLocationIds = ids);
-      } catch (_) {}
     }
   }
 
@@ -321,21 +292,12 @@ class _SupervisorFormScreenState
       final username = _usernameController.text.trim().toUpperCase();
       final email = '$username@ems.com';
 
-      final selectedLocationNames = _availableLocations
-          .where((l) => _selectedLocationIds.contains(l.id))
-          .map((l) => l.name)
-          .join(', ');
-
       final data = {
         'name': _nameController.text.trim(),
         'email': email,
         'mobile': _mobileController.text.trim().isEmpty
             ? null
             : _mobileController.text.trim(),
-        // Kept in sync as a readable summary for legacy displays/reports.
-        // Source of truth for assignment logic is supervisor_locations.
-        'assigned_area':
-            selectedLocationNames.isEmpty ? null : selectedLocationNames,
         'is_active': _isActive,
         'upi_id': _upiController.text.trim().isEmpty
             ? null
@@ -359,10 +321,6 @@ class _SupervisorFormScreenState
       } else {
         supervisor = await repo.create(data, 'Abcd@123');
       }
-
-      // Item 3: sync the many-to-many assignment. Empty selection is
-      // valid and means "unrestricted" (can submit for any location).
-      await repo.setAssignedLocations(supervisor.id, _selectedLocationIds);
 
       if (_photoFile != null) {
         final bytes = await _photoFile!.readAsBytes();
@@ -488,40 +446,6 @@ class _SupervisorFormScreenState
                     labelText: 'Mobile Number',
                     prefixIcon: Icon(Icons.phone_outlined)),
                 validator: ValidationUtils.validateMobile,
-              ),
-              const SizedBox(height: 16),
-              InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Assigned Location(s) — optional',
-                  prefixIcon: Icon(Icons.map_outlined),
-                  helperText:
-                      'Leave empty to allow attendance submission for ANY location',
-                  helperMaxLines: 2,
-                ),
-                child: _availableLocations.isEmpty
-                    ? const Text('No locations added yet',
-                        style: TextStyle(color: Colors.grey))
-                    : Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: _availableLocations.map((loc) {
-                          final selected =
-                              _selectedLocationIds.contains(loc.id);
-                          return FilterChip(
-                            label: Text(loc.name),
-                            selected: selected,
-                            onSelected: (val) {
-                              setState(() {
-                                if (val) {
-                                  _selectedLocationIds.add(loc.id);
-                                } else {
-                                  _selectedLocationIds.remove(loc.id);
-                                }
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
               ),
               const SizedBox(height: 16),
               TextFormField(
