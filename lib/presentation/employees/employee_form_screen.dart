@@ -305,7 +305,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
                 TextFormField(
                   controller: _wageController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Daily Wage Rate (â‚¹) *', prefixIcon: Icon(Icons.currency_rupee_rounded)),
+                  decoration: const InputDecoration(labelText: 'Daily Wage Rate (\u{20B9}) *', prefixIcon: Icon(Icons.currency_rupee_rounded)),
                   validator: ValidationUtils.validateAmount,
                 ),
                 const SizedBox(height: 16),
@@ -743,7 +743,7 @@ class _EmployeeDetailBodyState extends ConsumerState<_EmployeeDetailBody> {
           ),
           const SizedBox(height: 24),
 
-          // Create Login banner â€” only shown when no login exists
+          // Create Login banner \u{2014} only shown when no login exists
           if (!hasLogin) ...[
             Container(
               width: double.infinity,
@@ -842,7 +842,7 @@ class _EmployeeDetailBodyState extends ConsumerState<_EmployeeDetailBody> {
               _DetailRow(
                   icon: Icons.currency_rupee_rounded,
                   label: 'Daily Wage',
-                  value: 'â‚¹${employee.dailyWageRate.toStringAsFixed(2)}'),
+                  value: '\u{20B9}${employee.dailyWageRate.toStringAsFixed(2)}'),
             ],
           ),
           if (employee.hasUpi || employee.bankAccountNumber != null) ...[

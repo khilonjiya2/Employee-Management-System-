@@ -348,7 +348,7 @@ class _EmployeeCard extends StatelessWidget {
               children: [
                 w.StatusBadge(status: employee.status),
                 const SizedBox(height: 4),
-                Text('₹${employee.dailyWageRate.toStringAsFixed(0)}/day',
+                Text('\u{20B9}${employee.dailyWageRate.toStringAsFixed(0)}/day',
                     style: theme.textTheme.labelSmall),
               ],
             ),
