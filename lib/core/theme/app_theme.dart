@@ -66,7 +66,7 @@ class AppColors {
   static const backgroundDark = Color(0xFF0F1623);
   static const cardDark = Color(0xFF1E293B);
 
-  // ── Pink/Purple pastel theme ──
+  // \u{2500}\u{2500} Pink/Purple pastel theme \u{2500}\u{2500}
   static const pink50 = Color(0xFFFFF5FB);
   static const pink100 = Color(0xFFFFE6F4);
   static const pink200 = Color(0xFFFFCCE9);
