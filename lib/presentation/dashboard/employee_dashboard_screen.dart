@@ -214,7 +214,7 @@ class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> 
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${widget.employee.employeeCode} Â· ${widget.employee.designation ?? "Employee"}',
+                          '${widget.employee.employeeCode} \u{B7} ${widget.employee.designation ?? "Employee"}',
                           style: const TextStyle(
                             color: Color(0xCCFFFFFF),
                             fontFamily: 'Inter',
@@ -229,7 +229,7 @@ class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> 
             ),
             const SizedBox(height: 24),
             Text(
-              'Attendance Â· $monthLabel',
+              'Attendance \u{B7} $monthLabel',
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -288,6 +288,21 @@ class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> 
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () => context.push('/my-attendance-history', extra: widget.employee.id),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                label: const Text('View Full Payroll History'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary600,
+                  side: const BorderSide(color: AppColors.primary400),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => context.push('/my-payroll-history', extra: widget.employee.id),
               ),
             ),
             const SizedBox(height: 10),

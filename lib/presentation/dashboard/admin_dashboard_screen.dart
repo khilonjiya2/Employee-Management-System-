@@ -125,7 +125,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         ),
         data: (data) => RefreshIndicator(
           // Awaits the actual refetch so the spinner stays until fresh data
-          // arrives â€” this is the real-time/refresh fix for bug #4.
+          // arrives \u{2014} this is the real-time/refresh fix for bug #4.
           onRefresh: () async {
             ref.invalidate(dashboardStatsProvider);
             ref.invalidate(_unreadNotificationCountProvider);
@@ -292,7 +292,7 @@ class _DashboardBody extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          _sectionLabel("Expense Overview Â· $monthLabel"),
+          _sectionLabel("Expense Overview \u{B7} $monthLabel"),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -320,7 +320,7 @@ class _DashboardBody extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          _sectionLabel("Payroll Overview Â· $monthLabel"),
+          _sectionLabel("Payroll Overview \u{B7} $monthLabel"),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -724,7 +724,7 @@ class _SupervisorDashboardScreenState
                       Expanded(
                         child: _StatCard(
                           title: 'Attendance',
-                          value: stats['today_submitted'] == true ? 'Done âœ“' : 'Pending',
+                          value: stats['today_submitted'] == true ? 'Done \u{2713}' : 'Pending',
                           icon: Icons.calendar_today_rounded,
                           iconColor: stats['today_submitted'] == true
                               ? AppColors.success500
@@ -741,7 +741,7 @@ class _SupervisorDashboardScreenState
                   const SizedBox(height: 12),
 
                   Text(
-                    "Expenses Â· $monthLabel",
+                    "Expenses \u{B7} $monthLabel",
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -934,7 +934,7 @@ void _showMyPayslips(BuildContext context) {
         .eq('attendance_date', today)
         .maybeSingle();
 
-    // Current-month scoped (bug #4 fix on supervisor side too â€” was 'today' only before)
+    // Current-month scoped (bug #4 fix on supervisor side too \u{2014} was 'today' only before)
     final pendingThisMonth = await client
         .from('expenses')
         .select('id, amount')
