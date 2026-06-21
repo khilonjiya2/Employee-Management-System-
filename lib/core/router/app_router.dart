@@ -39,6 +39,7 @@ import '../../presentation/notifications/notifications_screen.dart';
 
 import '../../presentation/profile/my_bank_details_screen.dart';
 import '../../presentation/dashboard/employee_attendance_history_screen.dart';
+import '../../presentation/dashboard/employee_payroll_history_screen.dart';
 
 import '../../presentation/shared/main_shell.dart';
 
@@ -69,7 +70,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Force password change check.
       // IMPORTANT: only redirect TO /change-password using the cached profile
       // value (AsyncValue.valueOrNull). We deliberately do NOT redirect AWAY
-      // from /change-password here â€” that responsibility belongs solely to
+      // from /change-password here \u{2014} that responsibility belongs solely to
       // ForcePasswordChangeScreen itself after it confirms the profile was
       // actually updated (see force_password_change_screen.dart _save()).
       // This avoids the double-prompt bug where a stale cached profile
@@ -81,7 +82,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         // Only act on a profile we're CONFIDENT about: it must have data
         // AND not be in the middle of a refetch (isRefreshing == true means
         // Riverpod is still serving the PREVIOUS value while a new fetch is
-        // in flight â€” acting on that stale value is what caused the
+        // in flight \u{2014} acting on that stale value is what caused the
         // "asked to change password twice" bug).
         if (profileAsync.hasValue && !profileAsync.isRefreshing) {
           final profile = profileAsync.value;
@@ -269,6 +270,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: 'employeeAttendanceHistory',
             path: '/my-attendance-history',
             builder: (_, state) => EmployeeAttendanceHistoryScreen(
+                employeeId: state.extra as String),
+          ),
+          GoRoute(
+            name: 'employeePayrollHistory',
+            path: '/my-payroll-history',
+            builder: (_, state) => EmployeePayrollHistoryScreen(
                 employeeId: state.extra as String),
           ),
         ],
