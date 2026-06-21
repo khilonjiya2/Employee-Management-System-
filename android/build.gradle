@@ -14,7 +14,7 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// Fix device_apps and other outdated plugins
+// Force all libraries to use SDK 36 and fix appcompat version
 subprojects {
     plugins.withId("com.android.library") {
         android {
@@ -22,6 +22,12 @@ subprojects {
                 namespace = project.group ?: "com.placeholder.${project.name}"
             }
             compileSdk 36
+        }
+        configurations.all {
+            resolutionStrategy {
+                force "androidx.appcompat:appcompat:1.6.1"
+                force "androidx.core:core:1.12.0"
+            }
         }
     }
 }
