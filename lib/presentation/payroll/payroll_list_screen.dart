@@ -106,6 +106,7 @@ class _PayrollListScreenState extends ConsumerState<PayrollListScreen>
                           child: RefreshIndicator(
                             onRefresh: () async {
                               ref.invalidate(payrollListProvider(selectedMonth));
+                              ref.invalidate(companyProvider);
                               await ref.read(payrollListProvider(selectedMonth).future);
                             },
                             child: ListView.separated(
@@ -123,7 +124,7 @@ class _PayrollListScreenState extends ConsumerState<PayrollListScreen>
                     );
                   },
                 ),
-                // ---- Supervisors tab (new â€” item 6) ----
+                // ---- Supervisors tab (new \u{2014} item 6) ----
                 supervisorPayrollList.when(
                   loading: () => const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(child: Text('Error: $e')),
@@ -140,6 +141,7 @@ class _PayrollListScreenState extends ConsumerState<PayrollListScreen>
                             onRefresh: () async {
                               ref.invalidate(supervisorPayrollListProvider(selectedMonth));
                               ref.invalidate(allSupervisorsForPayrollProvider);
+                              ref.invalidate(companyProvider);
                               await ref.read(supervisorPayrollListProvider(selectedMonth).future);
                             },
                             child: list.isEmpty
@@ -314,7 +316,7 @@ class _PayrollCardWithPay extends ConsumerWidget {
 
   const _PayrollCardWithPay({required this.payroll, required this.onTap});
 
-  // In _PayrollCardWithPay â€” replace the entire build method:
+  // In _PayrollCardWithPay \u{2014} replace the entire build method:
 @override
 Widget build(BuildContext context, WidgetRef ref) {
   final theme = Theme.of(context);
@@ -571,12 +573,58 @@ class _ProcessSupervisorPayrollSheetState
   final _bonusController = TextEditingController(text: '0');
   final _deductionController = TextEditingController(text: '0');
   bool _isProcessing = false;
+  bool _isProcessingAll = false;
 
   @override
   void dispose() {
     _bonusController.dispose();
     _deductionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _processAll(BuildContext sheetContext) async {
+    setState(() => _isProcessingAll = true);
+    try {
+      final unprocessed = await ref
+          .read(supervisorPayrollRepositoryProvider)
+          .getUnprocessedForMonth(widget.month.month, widget.month.year);
+
+      if (unprocessed.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('All supervisors already have payroll processed for this month')));
+        }
+        setState(() => _isProcessingAll = false);
+        return;
+      }
+
+      // Salary is fixed per supervisor (not attendance-based), so this
+      // can safely run for everyone in one pass with no bonus/deduction
+      // \u{2014} those can still be added individually afterward if needed.
+      for (final supervisor in unprocessed) {
+        await ref.read(supervisorPayrollRepositoryProvider).processMonth(
+              supervisor.id,
+              widget.month.month,
+              widget.month.year,
+              supervisor.monthlySalary,
+            );
+      }
+      ref.invalidate(supervisorPayrollListProvider(widget.month));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Processed payroll for ${unprocessed.length} supervisor(s)'),
+            backgroundColor: AppColors.success500));
+        Navigator.of(sheetContext).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ErrorUtils.friendly(e)), backgroundColor: AppColors.error500),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessingAll = false);
+    }
   }
 
   Future<void> _process(BuildContext sheetContext) async {
@@ -623,13 +671,44 @@ class _ProcessSupervisorPayrollSheetState
           Text(DateFormat('MMMM yyyy').format(widget.month),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.secondary500)),
           const SizedBox(height: 16),
+          // Supervisor salary is fixed (not attendance-based), so all
+          // unprocessed supervisors can be processed in one click.
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: _isProcessingAll
+                  ? const SizedBox(
+                      height: 16, width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.bolt_rounded, size: 18),
+              label: Text(_isProcessingAll ? 'Processing...' : 'Process All Supervisors (Fixed Salary)'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary600,
+                side: const BorderSide(color: AppColors.primary400),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              onPressed: _isProcessingAll ? null : () => _processAll(context),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: const [
+              Expanded(child: Divider()),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text('OR process one individually', style: TextStyle(fontSize: 12, color: AppColors.secondary500)),
+              ),
+              Expanded(child: Divider()),
+            ],
+          ),
+          const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             value: _selectedSupervisorId,
             decoration: const InputDecoration(labelText: 'Supervisor'),
             items: widget.supervisors
                 .map((s) => DropdownMenuItem(
                     value: s.id,
-                    child: Text('${s.name} (â‚¹${s.monthlySalary.toStringAsFixed(0)}/mo)')))
+                    child: Text('${s.name} (\u{20B9}${s.monthlySalary.toStringAsFixed(0)}/mo)')))
                 .toList(),
             onChanged: (v) => setState(() => _selectedSupervisorId = v),
           ),
@@ -817,7 +896,7 @@ class _PayrollProcessScreenState extends ConsumerState<PayrollProcessScreen> {
                             });
                           },
                           title: Text(emp.name, style: Theme.of(context).textTheme.titleMedium),
-                          subtitle: Text('${emp.employeeCode} â€¢ â‚¹${emp.dailyWageRate}/day', style: Theme.of(context).textTheme.bodySmall),
+                          subtitle: Text('${emp.employeeCode} \u{2022} \u{20B9}${emp.dailyWageRate}/day', style: Theme.of(context).textTheme.bodySmall),
                           secondary: CircleAvatar(
                             radius: 18,
                             backgroundColor: AppColors.primary100,

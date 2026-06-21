@@ -206,7 +206,7 @@ class PayrollDetailScreen extends ConsumerWidget {
             Expanded(
               child: Text(
                 p.utrReference != null
-                    ? 'Paid via UPI · UTR: ${p.utrReference}'
+                    ? 'Paid via UPI \u{B7} UTR: ${p.utrReference}'
                     : 'Marked as Paid',
                 style: const TextStyle(
                     color: AppColors.success700,
@@ -299,7 +299,7 @@ class PayrollDetailScreen extends ConsumerWidget {
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// \u{2500}\u{2500} Helpers \u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}
 
 class _Card extends StatelessWidget {
   final String title;
