@@ -256,7 +256,7 @@ class EmployeeRepository {
         .select('*, attendance!inner(attendance_date, location_name, is_approved)')
         .eq('employee_id', employeeId)
         // Item 5 (new list)/correctness fix: only count attendance that
-        // has actually been APPROVED â€” an employee's dashboard
+        // has actually been APPROVED \u{2014} an employee's dashboard
         // shouldn't show pending/unapproved days as if they're final,
         // since that's not what payroll will end up using either.
         .eq('attendance.is_approved', true);
@@ -419,7 +419,7 @@ class SupervisorRepository {
   }
 
   /// Item 3: a supervisor's assigned locations are OPTIONAL and
-  /// many-to-many. An empty list means "unrestricted" â€” this supervisor
+  /// many-to-many. An empty list means "unrestricted" \u{2014} this supervisor
   /// can submit attendance for ANY location, which is the existing
   /// default behavior and must be preserved.
   Future<List<String>> getAssignedLocationIds(String supervisorId) async {
@@ -1085,7 +1085,7 @@ class PayrollRepository {
     // day has been APPROVED for this employee this month.
     // get_monthly_attendance_summary is assumed to only count attendance
     // where is_approved = true (please verify this matches your RPC's
-    // actual definition â€” I don't have its source to confirm).
+    // actual definition \u{2014} I don't have its source to confirm).
     if (presentDays == 0 && halfDays == 0) {
       throw Exception(
           'Cannot process payroll: no approved attendance found for this employee in this period. At least one day must be approved first.');
@@ -1094,7 +1094,7 @@ class PayrollRepository {
     // Item 5: if this employee's payroll for this month was already
     // marked PAID, and attendance has since changed, re-processing
     // should refresh the wage numbers but must NOT silently erase the
-    // fact that a payment was already made â€” that's financial data the
+    // fact that a payment was already made \u{2014} that's financial data the
     // admin needs to see in order to manually reconcile any difference.
     final existing = await _client
         .from('payroll')
@@ -1132,7 +1132,7 @@ class PayrollRepository {
       'advance_deduction': totalAdvance,
       'penalty_deduction': 0,
       'bonus': 0,
-      // Keep 'paid' status visible if it was already paid â€” re-processing
+      // Keep 'paid' status visible if it was already paid \u{2014} re-processing
       // updates the wage breakdown from fresh attendance but must not
       // hide that money already changed hands at the OLD numbers. The
       // admin should review and manually reconcile any difference.
@@ -1186,7 +1186,7 @@ class PayrollRepository {
     }).eq('id', id);
   }
 
-  /// CURRENT MONTH liability/paid/pending â€” already scoped by month/year params
+  /// CURRENT MONTH liability/paid/pending \u{2014} already scoped by month/year params
   Future<Map<String, double>> getMonthlySummary(int month, int year) async {
     final data = await _client
         .from('payroll')
@@ -1323,7 +1323,7 @@ class NotificationRepository {
   }
 }
 
-/// Dashboard stats â€” now autoDispose (bug #4 fix: stops permanent caching) and
+/// Dashboard stats \u{2014} now autoDispose (bug #4 fix: stops permanent caching) and
 /// expense summary is scoped to CURRENT MONTH ONLY (was all-time before).
 final dashboardStatsProvider =
     FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
@@ -1392,7 +1392,7 @@ class SupervisorPayrollRepository {
   final SupabaseClient _client;
   SupervisorPayrollRepository(this._client);
 
-  /// All supervisors' payroll for a given month (admin view) â€” mirrors
+  /// All supervisors' payroll for a given month (admin view) \u{2014} mirrors
   /// PayrollRepository.getByMonthYear for employees.
   Future<List<SupervisorPayrollModel>> getByMonthYear(
       int month, int year) async {
@@ -1489,7 +1489,7 @@ class SupervisorPayrollRepository {
     }).eq('id', id);
   }
 
-  /// Mirrors PayrollRepository.getMonthlySummary for employees â€” used so
+  /// Mirrors PayrollRepository.getMonthlySummary for employees \u{2014} used so
   /// the admin dashboard's payroll Liability/Paid/Pending cards include
   /// BOTH employees and supervisors, not employees only.
   Future<Map<String, double>> getMonthlySummary(int month, int year) async {
