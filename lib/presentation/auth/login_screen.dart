@@ -201,7 +201,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               controller: _emailController,
               // NOTE: intentionally no `textCapitalization` here. We used to
               // set TextCapitalization.characters, but that's a keyboard
-              // HINT only â€” behavior is inconsistent across Android
+              // HINT only \u{2014} behavior is inconsistent across Android
               // versions/keyboard apps (some force real uppercase chars,
               // some don't, some fight with autocorrect). The username is
               // already normalized with .toUpperCase() before use, so we
