@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:device_apps/device_apps.dart';
 import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
 
@@ -333,6 +334,23 @@ class ConfirmDialog extends StatelessWidget {
   }
 }
 
+class _UpiApp {
+  final String name;
+  final String package;
+  const _UpiApp(this.name, this.package);
+}
+
+const _kUpiApps = [
+  _UpiApp('Google Pay', 'com.google.android.apps.nbu.paisa.user'),
+  _UpiApp('PhonePe', 'com.phonepe.app'),
+  _UpiApp('Paytm', 'net.one97.paytm'),
+  _UpiApp('BHIM', 'in.org.npci.upiapp'),
+  _UpiApp('Amazon Pay', 'in.amazon.mShop.android.shopping'),
+  _UpiApp('CRED', 'com.dreamplug.androidapp'),
+  _UpiApp('WhatsApp', 'com.whatsapp'),
+  _UpiApp('iMobile Pay', 'com.csam.icici.bank.imobile'),
+  _UpiApp('SBI Pay', 'com.sbi.upi'),
+];
 
 /// Shared UPI payment flow used by both expense and payroll PAY buttons.
 /// Launches the recipient's UPI app via deep link, then asks the admin to
@@ -488,6 +506,43 @@ class UpiPaymentHelper {
     );
   }
 
+  static Future<String?> _pickUpiApp(BuildContext context, List<_UpiApp> apps) {
+    return showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Pay with', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ),
+            ...apps.map((a) => ListTile(
+                  leading: const Icon(Icons.account_balance_wallet_outlined),
+                  title: Text(a.name),
+                  onTap: () => Navigator.pop(ctx, a.package),
+                )),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Future<bool> _launchExplicit(String uri, String packageName) async {
+    try {
+      final intent = AndroidIntent(
+        action: 'action_view',
+        data: uri,
+        package: packageName,
+      );
+      await intent.launch();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<void> _launchAndConfirm({
     required BuildContext context,
     required WidgetRef ref,
@@ -504,14 +559,7 @@ class UpiPaymentHelper {
           referenceNote: referenceNote,
         );
 
-    Uri? parsedUri;
-    try {
-      parsedUri = Uri.parse(uri);
-    } catch (_) {
-      parsedUri = null;
-    }
-
-    if (parsedUri == null) {
+    if (Uri.tryParse(uri) == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -523,47 +571,48 @@ class UpiPaymentHelper {
       return;
     }
 
-    bool launched = false;
-    // IMPORTANT: we deliberately do NOT gate this on canLaunchUrl().
-    // canLaunchUrl() is well known to return false-negatives for custom
-    // URI schemes (like upi://) on many Android versions/OEM skins, even
-    // when a UPI app IS installed and able to handle it — which is
-    // exactly what was blocking real launches before. We instead try
-    // the launch directly, in safest-to-most-permissive order, and only
-    // treat it as failed if every attempt throws or returns false.
-    try {
-      launched = await launchUrl(
-        parsedUri,
-        mode: LaunchMode.externalNonBrowserApplication,
-      );
-    } catch (_) {
-      launched = false;
+    // IMPORTANT: we detect installed apps by package name and launch via
+    // an EXPLICIT intent (package set directly), instead of letting
+    // Android resolve an implicit upi:// intent. This fixes the MIUI
+    // ("GetApps"/Mi Store) hijack on Android 10 — MIUI's resolver
+    // intercepts ambiguous ACTION_VIEW+BROWSABLE intents before they
+    // reach the real UPI app, but an explicit-package intent bypasses
+    // that resolver entirely since there's nothing for it to disambiguate.
+    final installed = <_UpiApp>[];
+    for (final app in _kUpiApps) {
+      try {
+        if (await DeviceApps.isAppInstalled(app.package)) installed.add(app);
+      } catch (_) {}
     }
 
-    if (!launched) {
-      try {
-        launched = await launchUrl(
-          parsedUri,
-          mode: LaunchMode.externalApplication,
+    if (installed.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No UPI app found on this device. Install GPay, PhonePe, or Paytm to pay directly, or use "Mark Paid" after paying manually.'),
+            backgroundColor: AppColors.error500,
+          ),
         );
-      } catch (_) {
-        launched = false;
       }
+      return;
     }
 
-    if (!launched) {
-      try {
-        launched = await launchUrl(parsedUri);
-      } catch (_) {
-        launched = false;
-      }
+    String? chosenPackage;
+    if (installed.length == 1) {
+      chosenPackage = installed.first.package;
+    } else {
+      if (!context.mounted) return;
+      chosenPackage = await _pickUpiApp(context, installed);
+      if (chosenPackage == null) return;
     }
+
+    final launched = await _launchExplicit(uri, chosenPackage);
 
     if (!launched) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No UPI app found on this device. Install GPay, PhonePe, or Paytm to pay directly, or use "Mark Paid" after paying manually.'),
+            content: Text('Could not open the selected app. Please try again or use "Mark Paid" after paying manually.'),
             backgroundColor: AppColors.error500,
           ),
         );
@@ -684,4 +733,3 @@ class _PaymentConfirmDialogState extends State<_PaymentConfirmDialog> {
     );
   }
 }
-
