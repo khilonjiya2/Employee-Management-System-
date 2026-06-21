@@ -14,13 +14,14 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// Fix for packages missing 'namespace' (e.g. device_apps 2.2.0)
+// Fix device_apps and other outdated plugins
 subprojects {
     plugins.withId("com.android.library") {
         android {
             if (namespace == null) {
                 namespace = project.group ?: "com.placeholder.${project.name}"
             }
+            compileSdk 36
         }
     }
 }
