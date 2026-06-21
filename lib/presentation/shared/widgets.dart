@@ -386,6 +386,7 @@ class UpiPaymentHelper {
       upiId: upiId,
       amount: expense.amount,
       referenceNote: 'Expense ${expense.expenseName}',
+      transactionRef: _makeTransactionRef('EXP', expense.id),
       onConfirmed: (utr) async {
         await ref.read(paymentRepositoryProvider).confirmExpensePayment(
               expense.id,
@@ -432,6 +433,7 @@ class UpiPaymentHelper {
       upiId: upiId,
       amount: payroll.netWage,
       referenceNote: 'Salary ${payroll.payrollMonth}-${payroll.payrollYear}',
+      transactionRef: _makeTransactionRef('PAY', payroll.id),
       onConfirmed: (utr) async {
         await ref.read(payrollRepositoryProvider).confirmPayment(
               payroll.id,
@@ -470,6 +472,7 @@ class UpiPaymentHelper {
       upiId: upiId,
       amount: record.netAmount,
       referenceNote: 'Salary ${record.payrollMonth}-${record.payrollYear}',
+      transactionRef: _makeTransactionRef('SUP', record.id),
       onConfirmed: (utr) async {
         await ref
             .read(supervisorPayrollRepositoryProvider)
@@ -543,6 +546,24 @@ static Future<bool> _launchExplicit(String uri, String packageName) async {
     }
   }
 
+  // Builds the UPI `tr` (transaction reference) parameter. Per NPCI's
+  // UPI deep-linking spec this should be a unique, alphanumeric
+  // reference per transaction attempt. We learned the hard way that
+  // OMITTING it causes GPay/PhonePe/Paytm to treat the deep link as an
+  // unrecognized/unverified request and apply much stricter fraud/risk
+  // checks \u{2014} which is exactly what was producing vague "limit
+  // exceeded"/"risk policy" rejections regardless of the amount, even
+  // for \u{20B9}1. Using the actual record id keeps it unique AND makes it
+  // traceable back to the specific expense/payroll record if you ever
+  // need to reconcile a UTR against it.
+  static String _makeTransactionRef(String prefix, String recordId) {
+    final sanitizedId =
+        recordId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+    final ref = '$prefix$sanitizedId';
+    // NPCI recommends keeping tr <= 35 chars.
+    return ref.length > 35 ? ref.substring(0, 35) : ref;
+  }
+
   
 
   static Future<void> _launchAndConfirm({
@@ -552,6 +573,7 @@ static Future<bool> _launchExplicit(String uri, String packageName) async {
     required String upiId,
     required double amount,
     required String referenceNote,
+    required String transactionRef,
     required Future<void> Function(String? utr) onConfirmed,
   }) async {
     final uri = ref.read(paymentRepositoryProvider).buildUpiUri(
@@ -559,6 +581,7 @@ static Future<bool> _launchExplicit(String uri, String packageName) async {
           payeeName: payeeName,
           amount: amount,
           referenceNote: referenceNote,
+          transactionRef: transactionRef,
         );
 
     if (Uri.tryParse(uri) == null) {
@@ -576,7 +599,7 @@ static Future<bool> _launchExplicit(String uri, String packageName) async {
     // IMPORTANT: we detect installed apps by package name and launch via
     // an EXPLICIT intent (package set directly), instead of letting
     // Android resolve an implicit upi:// intent. This fixes the MIUI
-    // ("GetApps"/Mi Store) hijack on Android 10 — MIUI's resolver
+    // ("GetApps"/Mi Store) hijack on Android 10 \u{2014} MIUI's resolver
     // intercepts ambiguous ACTION_VIEW+BROWSABLE intents before they
     // reach the real UPI app, but an explicit-package intent bypasses
     // that resolver entirely since there's nothing for it to disambiguate.
