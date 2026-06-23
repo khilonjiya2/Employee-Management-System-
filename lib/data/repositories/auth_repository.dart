@@ -1368,16 +1368,13 @@ final dashboardStatsProvider =
   final monthStart = DateTime(now.year, now.month, 1);
   final monthEnd = DateTime(now.year, now.month + 1, 0);
 
-  // Run all queries in parallel instead of sequentially \u{2014} this
-  // reduces dashboard load time from ~5 sequential network round-trips
-  // to 1 parallel batch, typically cutting load time by 60-80%.
-  final results = await Future.wait([
-    client.from('employees').select('id'),                              // 0
-    client.from('employees').select('id').eq('status', 'active'),      // 1
-    ref.read(attendanceRepositoryProvider).getTodaySummary(),          // 2
-    ref.read(expenseRepositoryProvider).getSummary(fromDate: monthStart, toDate: monthEnd), // 3
-    ref.read(payrollRepositoryProvider).getMonthlySummary(now.month, now.year), // 4
-    ref.read(supervisorPayrollRepositoryProvider).getMonthlySummary(now.month, now.year), // 5
+  final results = await Future.wait<dynamic>([
+    client.from('employees').select('id') as Future<dynamic>,
+    client.from('employees').select('id').eq('status', 'active') as Future<dynamic>,
+    ref.read(attendanceRepositoryProvider).getTodaySummary(),
+    ref.read(expenseRepositoryProvider).getSummary(fromDate: monthStart, toDate: monthEnd),
+    ref.read(payrollRepositoryProvider).getMonthlySummary(now.month, now.year),
+    ref.read(supervisorPayrollRepositoryProvider).getMonthlySummary(now.month, now.year),
   ]);
 
   final totalEmp = results[0] as List;
