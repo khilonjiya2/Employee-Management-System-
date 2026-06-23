@@ -45,7 +45,8 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<ExpenseModel>>> {
 }
 
 class ExpensesListScreen extends ConsumerStatefulWidget {
-  const ExpensesListScreen({super.key});
+  final String? initialFilter; // 'pending', 'approved', 'rejected'
+  const ExpensesListScreen({super.key, this.initialFilter});
 
   @override
   ConsumerState<ExpensesListScreen> createState() => _ExpensesListScreenState();
@@ -58,6 +59,17 @@ class _ExpensesListScreenState extends ConsumerState<ExpensesListScreen> with Si
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    // Jump to pre-selected tab if coming from dashboard card
+    if (widget.initialFilter != null) {
+      const statuses = [null, 'pending', 'approved', 'rejected'];
+      final idx = statuses.indexOf(widget.initialFilter);
+      if (idx > 0) {
+        _tabController.index = idx;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(expensesProvider.notifier).load(status: widget.initialFilter);
+        });
+      }
+    }
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) {
         final statuses = [null, 'pending', 'approved', 'rejected'];
@@ -755,7 +767,18 @@ class ExpenseDetailScreen extends ConsumerWidget {
               'payment_confirmed_at': DateTime.now().toIso8601String(),
               'payment_confirmed_by': ref.read(supabaseProvider).auth.currentUser?.id,
             });
-            ref.invalidate(expensesProvider);
+            // Use notifier.load() rather than invalidate() so the
+            // currently-mounted widget sees the update immediately
+            // without needing to reopen the screen.
+            await ref.read(expensesProvider.notifier).refresh();
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Marked as paid'),
+                  backgroundColor: AppColors.success500,
+                ),
+              );
+            }
           } catch (e) {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
