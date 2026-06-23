@@ -263,8 +263,31 @@ void dispose() {
 
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
-      // Items 4 & 7: only ONE attendance record may exist per
-      // (location, date), regardless of which supervisor submits it.
+      // Validate: check if any employee in this attendance has a joining
+      // date AFTER the selected attendance date. This prevents backdating
+      // attendance for employees who hadn't joined yet.
+      final employeesBeforeJoining = _filteredEmployees.where((emp) {
+        if (_attendance[emp.id] != AttendanceStatus.present) return false;
+        final joining = DateTime(emp.joiningDate.year, emp.joiningDate.month, emp.joiningDate.day);
+        final selected = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+        return selected.isBefore(joining);
+      }).toList();
+
+      if (employeesBeforeJoining.isNotEmpty) {
+        final names = employeesBeforeJoining.map((e) => e.name).join(', ');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+              'Cannot mark attendance: $names had not joined on this date. '
+              'Attendance can only be submitted from each employee\'s joining date onwards.',
+            ),
+            backgroundColor: AppColors.error500,
+            duration: const Duration(seconds: 5),
+          ));
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
       // If one already exists, block creating a duplicate \u{2014} the
       // supervisor who owns it must EDIT it instead (and any other
       // supervisor is blocked outright while it's pending/approved).
