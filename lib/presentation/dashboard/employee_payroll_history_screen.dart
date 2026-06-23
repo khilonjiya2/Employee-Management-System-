@@ -15,9 +15,6 @@ final _fullPayrollHistoryProvider = FutureProvider.autoDispose
       .getOwnPayrollHistory(employeeId, limit: 24);
 });
 
-/// Full payroll/salary history for the logged-in employee \u{2014} note: half
-/// day / leave breakdowns are intentionally not shown yet, this is a
-/// simple present/absent based summary for now.
 class EmployeePayrollHistoryScreen extends ConsumerWidget {
   final String employeeId;
   const EmployeePayrollHistoryScreen({super.key, required this.employeeId});
@@ -57,18 +54,120 @@ class EmployeePayrollHistoryScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               itemCount: list.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (_, i) => _PayslipCard(payroll: list[i]),
+              itemBuilder: (_, i) => _PayslipCard(
+                payroll: list[i],
+                onTap: () => _showPayslipDetail(context, list[i]),
+              ),
             );
           },
         ),
       ),
     );
   }
+
+  void _showPayslipDetail(BuildContext context, PayrollModel p) {
+    final month = DateFormat('MMMM yyyy')
+        .format(DateTime(p.payrollYear, p.payrollMonth));
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        expand: false,
+        builder: (_, ctrl) => ListView(
+          controller: ctrl,
+          padding: const EdgeInsets.all(24),
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.secondary300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Payslip \u{2014} $month',
+                style: const TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.w800, fontFamily: 'Inter')),
+            const SizedBox(height: 4),
+            w.StatusBadge(status: p.status),
+            const SizedBox(height: 20),
+            _PayslipRow(label: 'Daily Wage Rate', value: CurrencyUtils.format(p.dailyWageRate)),
+            _PayslipRow(label: 'Present Days', value: p.presentDays.toStringAsFixed(1)),
+            _PayslipRow(label: 'Absent Days', value: p.absentDays.toStringAsFixed(1)),
+            _PayslipRow(label: 'Half Days', value: p.halfDays.toStringAsFixed(1)),
+            _PayslipRow(label: 'Overtime Hours', value: p.overtimeHours.toStringAsFixed(1)),
+            _PayslipRow(label: 'Overtime Amount', value: CurrencyUtils.format(p.overtimeAmount)),
+            const Divider(height: 24),
+            _PayslipRow(label: 'Gross Wage', value: CurrencyUtils.format(p.grossWage)),
+            _PayslipRow(label: 'Advance Deduction', value: '- ${CurrencyUtils.format(p.advanceDeduction)}',
+                valueColor: AppColors.error600),
+            _PayslipRow(label: 'Penalty', value: '- ${CurrencyUtils.format(p.penaltyDeduction)}',
+                valueColor: AppColors.error600),
+            _PayslipRow(label: 'Bonus', value: '+ ${CurrencyUtils.format(p.bonus)}',
+                valueColor: AppColors.success600),
+            const Divider(height: 24),
+            _PayslipRow(
+              label: 'Net Wage',
+              value: CurrencyUtils.format(p.netWage),
+              bold: true,
+              valueColor: AppColors.primary600,
+            ),
+            if (p.paidAt != null) ...[
+              const SizedBox(height: 16),
+              Row(children: [
+                const Icon(Icons.check_circle_rounded, size: 16, color: AppColors.success500),
+                const SizedBox(width: 6),
+                Text('Paid on ${DateFormat('dd MMM yyyy').format(p.paidAt!.toLocal())}',
+                    style: const TextStyle(color: AppColors.success600, fontSize: 13)),
+              ]),
+            ],
+            if (p.remarks != null && p.remarks!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text('Note: ${p.remarks}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.secondary500)),
+            ],
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PayslipRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool bold;
+  final Color? valueColor;
+  const _PayslipRow({required this.label, required this.value, this.bold = false, this.valueColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [
+        Expanded(child: Text(label,
+            style: TextStyle(
+                fontSize: 13, color: AppColors.secondary600,
+                fontWeight: bold ? FontWeight.w700 : FontWeight.w400))),
+        Text(value,
+            style: TextStyle(
+                fontSize: 13, fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+                fontFamily: 'Inter', color: valueColor ?? AppColors.secondary800)),
+      ]),
+    );
+  }
 }
 
 class _PayslipCard extends StatelessWidget {
   final PayrollModel payroll;
-  const _PayslipCard({required this.payroll});
+  final VoidCallback onTap;
+  const _PayslipCard({required this.payroll, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -76,39 +175,36 @@ class _PayslipCard extends StatelessWidget {
     final monthLabel = DateFormat('MMMM yyyy')
         .format(DateTime(payroll.payrollYear, payroll.payrollMonth));
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.secondary200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(monthLabel,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, fontFamily: 'Inter')),
-              ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.secondary200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(child: Text(monthLabel,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 15, fontFamily: 'Inter'))),
               w.StatusBadge(status: payroll.status),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.secondary400),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
               _MiniStat(label: 'Present', value: payroll.presentDays.toStringAsFixed(0)),
               _MiniStat(label: 'Absent', value: payroll.absentDays.toStringAsFixed(0)),
               _MiniStat(label: 'Net Wage', value: CurrencyUtils.format(payroll.netWage)),
-            ],
-          ),
-          if (isPaid) ...[
-            const SizedBox(height: 8),
-            const Divider(height: 1),
-            const SizedBox(height: 8),
-            Row(
-              children: [
+            ]),
+            if (isPaid) ...[
+              const SizedBox(height: 8),
+              Row(children: [
                 const Icon(Icons.check_circle_rounded, size: 14, color: AppColors.success500),
                 const SizedBox(width: 6),
                 Text(
@@ -117,10 +213,10 @@ class _PayslipCard extends StatelessWidget {
                       : 'Paid',
                   style: const TextStyle(fontSize: 12, color: AppColors.success600),
                 ),
-              ],
-            ),
+              ]),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -134,13 +230,13 @@ class _MiniStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, fontFamily: 'Inter')),
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.secondary500)),
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(value,
+            style: const TextStyle(
+                fontWeight: FontWeight.w700, fontSize: 14, fontFamily: 'Inter')),
+        Text(label,
+            style: const TextStyle(fontSize: 11, color: AppColors.secondary500)),
+      ]),
     );
   }
 }
