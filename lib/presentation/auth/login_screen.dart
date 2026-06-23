@@ -39,8 +39,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     try {
       final auth = ref.read(authRepositoryProvider);
-      final username = _emailController.text.trim().toUpperCase();
-      final email = '$username@ems.com';
+      // Username is the mobile number \u{2014} we convert it to an email for
+      // Supabase auth by appending @ems.com, matching how accounts are
+      // created (see create-supervisor / create-employee edge functions).
+      final mobile = _emailController.text.trim();
+      final email = '$mobile@ems.com';
 
       await auth.signInWithEmail(email, _passwordController.text);
 
@@ -199,21 +202,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           children: [
             TextFormField(
               controller: _emailController,
-              // NOTE: intentionally no `textCapitalization` here. We used to
-              // set TextCapitalization.characters, but that's a keyboard
-              // HINT only \u{2014} behavior is inconsistent across Android
-              // versions/keyboard apps (some force real uppercase chars,
-              // some don't, some fight with autocorrect). The username is
-              // already normalized with .toUpperCase() before use, so we
-              // don't need the keyboard to do it, and leaving it off lets
-              // people type naturally.
               textInputAction: TextInputAction.next,
+              keyboardType: TextInputType.phone,
               enabled: !_isLoading,
               decoration: const InputDecoration(
-                  labelText: 'User ID',
-                  prefixIcon: Icon(Icons.person_outline)),
+                  labelText: 'Mobile Number',
+                  hintText: '10-digit mobile number',
+                  prefixIcon: Icon(Icons.phone_outlined)),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'User ID is required';
+                if (v == null || v.trim().isEmpty) return 'Mobile number is required';
+                if (!RegExp(r'^\d{10}$').hasMatch(v.trim())) {
+                  return 'Enter a valid 10-digit mobile number';
+                }
                 return null;
               },
             ),
