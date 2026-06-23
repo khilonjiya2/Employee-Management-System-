@@ -133,14 +133,6 @@ class _SupervisorsListScreenState
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await context.push('/supervisors/new');
-          ref.read(supervisorsProvider.notifier).refresh();
-        },
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Supervisor'),
-      ),
     );
   }
 }
@@ -318,8 +310,21 @@ class _SupervisorFormScreenState
 
     try {
       final repo = ref.read(supervisorRepositoryProvider);
-      final username = _usernameController.text.trim().toUpperCase();
-      final email = '$username@ems.com';
+
+      final mobile = _mobileController.text.trim();
+      if (!isEditing && mobile.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Mobile number is required for creating a supervisor'),
+          backgroundColor: AppColors.error500,
+        ));
+        return;
+      }
+
+      // Username is now the mobile number: mobile@ems.com
+      // For editing, the email/login is already set and cannot be changed.
+      final email = isEditing
+          ? null
+          : '$mobile@ems.com';
 
       final selectedLocationNames = _availableLocations
           .where((l) => _selectedLocationIds.contains(l.id))
@@ -328,12 +333,8 @@ class _SupervisorFormScreenState
 
       final data = {
         'name': _nameController.text.trim(),
-        'email': email,
-        'mobile': _mobileController.text.trim().isEmpty
-            ? null
-            : _mobileController.text.trim(),
-        // Kept in sync as a readable summary for legacy displays/reports.
-        // Source of truth for assignment logic is supervisor_locations.
+        if (!isEditing) 'email': email,
+        'mobile': mobile.isEmpty ? null : mobile,
         'assigned_area':
             selectedLocationNames.isEmpty ? null : selectedLocationNames,
         'is_active': _isActive,
@@ -459,35 +460,24 @@ class _SupervisorFormScreenState
                     ValidationUtils.validateRequired(v, 'Name'),
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _usernameController,
-                // See login_screen.dart for why we don't force
-                // TextCapitalization here \u{2014} value is uppercased
-                // programmatically before use (line ~295).
-                readOnly: isEditing,
-                decoration: InputDecoration(
-                  labelText: 'Username *',
-                  prefixIcon:
-                      const Icon(Icons.person_outline_rounded),
-                  helperText:
-                      isEditing ? 'Username cannot be changed' : null,
-                ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty)
-                    return 'Username is required';
-                  if (v.contains('@') || v.contains(' '))
-                    return 'Username cannot contain @ or spaces';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
+              // NOTE: Username is no longer a separate field. The login
+              // is now built automatically from the mobile number:
+              // mobile@ems.com. Mobile is mandatory for supervisors.
               TextFormField(
                 controller: _mobileController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                    labelText: 'Mobile Number',
-                    prefixIcon: Icon(Icons.phone_outlined)),
-                validator: ValidationUtils.validateMobile,
+                readOnly: isEditing,
+                decoration: InputDecoration(
+                    labelText: 'Mobile Number *',
+                    prefixIcon: const Icon(Icons.phone_outlined),
+                    helperText: isEditing
+                        ? 'Mobile / login cannot be changed'
+                        : 'This becomes the supervisor\'s login'),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Mobile number is required';
+                  if (!RegExp(r'^\d{10}$').hasMatch(v.trim())) return 'Enter a valid 10-digit mobile number';
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               InputDecorator(
