@@ -379,7 +379,7 @@ class _SupervisorFormScreenState
           SnackBar(
             content: Text(isEditing
                 ? 'Supervisor updated'
-                : 'Supervisor created. Login: $username / Abcd@123'),
+                : 'Supervisor created. Login: $mobile / Abcd@123'),
             backgroundColor: AppColors.success500,
           ),
         );
