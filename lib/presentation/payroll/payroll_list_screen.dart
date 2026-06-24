@@ -419,44 +419,16 @@ Widget build(BuildContext context, WidgetRef ref) {
         if (!payroll.isPaid)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Row(
-              children: [
-                if (paymentEnabled)
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(
-                          Icons.account_balance_wallet_rounded,
-                          size: 16),
-                      label: const Text('Pay via UPI'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.success600,
-                        side:
-                            const BorderSide(color: AppColors.success500),
-                      ),
-                      onPressed: () =>
-                          w.UpiPaymentHelper.payPayroll(context, ref, payroll),
-                    ),
-                  ),
-                if (paymentEnabled) const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.check_rounded, size: 16),
-                    label: const Text('Mark Paid'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary600,
-                      side:
-                          const BorderSide(color: AppColors.primary500),
-                    ),
-                    onPressed: () async {
-                      await ref
-                          .read(payrollRepositoryProvider)
-                          .markAsPaid(payroll.id);
-                      ref.invalidate(
-                          payrollListProvider(ref.read(selectedPayrollMonthProvider)));
-                    },
-                  ),
-                ),
-              ],
+            child: w.CashfreePayButton(
+              referenceType: 'payroll',
+              referenceId: payroll.id,
+              payeeName: payroll.employeeName ?? 'Employee',
+              amount: payroll.netWage,
+              currentPaymentStatus: payroll.paymentStatus,
+              onMarkPaid: () async {
+                await ref.read(payrollRepositoryProvider).markAsPaid(payroll.id);
+                ref.invalidate(payrollListProvider(ref.read(selectedPayrollMonthProvider)));
+              },
             ),
           ),
       ],
@@ -536,40 +508,16 @@ class _SupervisorPayrollCard extends ConsumerWidget {
           if (!isPaid)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Row(
-                children: [
-                  if (paymentEnabled)
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.account_balance_wallet_rounded, size: 16),
-                        label: const Text('Pay via UPI'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.success600,
-                          side: const BorderSide(color: AppColors.success500),
-                        ),
-                        onPressed: () => w.UpiPaymentHelper
-                            .paySupervisorSalary(context, ref, record, supervisor),
-                      ),
-                    ),
-                  if (paymentEnabled) const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.check_rounded, size: 16),
-                      label: const Text('Mark Paid'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary600,
-                        side: const BorderSide(color: AppColors.primary500),
-                      ),
-                      onPressed: () async {
-                        await ref
-                            .read(supervisorPayrollRepositoryProvider)
-                            .markAsPaid(record.id);
-                        ref.invalidate(supervisorPayrollListProvider(
-                            ref.read(selectedPayrollMonthProvider)));
-                      },
-                    ),
-                  ),
-                ],
+              child: w.CashfreePayButton(
+                referenceType: 'expense', // supervisors are paid like expense reimbursements
+                referenceId: record.id,
+                payeeName: supervisor.name,
+                amount: record.netAmount,
+                currentPaymentStatus: record.paymentStatus,
+                onMarkPaid: () async {
+                  await ref.read(supervisorPayrollRepositoryProvider).markAsPaid(record.id);
+                  ref.invalidate(supervisorPayrollListProvider(ref.read(selectedPayrollMonthProvider)));
+                },
               ),
             ),
         ],
