@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:device_apps/device_apps.dart';
 import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
-
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/app_utils.dart';
+import '../payroll/payroll_list_screen.dart' show payrollListProvider;
+import '../expenses/expenses_list_screen.dart' show expensesProvider;
 
 class StatCard extends StatelessWidget {
   final String title;
@@ -357,6 +360,42 @@ const _kUpiApps = [
 /// confirm whether the payment succeeded and optionally enter a UTR number.
 class UpiPaymentHelper {
   UpiPaymentHelper._();
+
+  // ---------------------------------------------------------------------------
+  // Cashfree Payouts: server-side payment initiation via edge function.
+  // Used when payment_module_enabled = true in the company's settings.
+  // The edge function calls Cashfree API, which then calls our webhook
+  // to auto-update the status when payment succeeds or fails.
+  // ---------------------------------------------------------------------------
+
+  static Future<void> payViaCashfree({
+    required BuildContext context,
+    required WidgetRef ref,
+    required String referenceType, // 'payroll' or 'expense'
+    required String referenceId,
+    required String payeeName,
+    required double amount,
+  }) async {
+    final profile = ref.read(currentProfileProvider).valueOrNull;
+    if (profile == null) return;
+
+    // Show the payment sheet
+    if (!context.mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _CashfreePaymentSheet(
+        ref: ref,
+        referenceType: referenceType,
+        referenceId: referenceId,
+        payeeName: payeeName,
+        amount: amount,
+        callerProfileId: profile.id,
+      ),
+    );
+  }
 
   static Future<void> payExpense(
     BuildContext context,
@@ -755,6 +794,399 @@ class _PaymentConfirmDialogState extends State<_PaymentConfirmDialog> {
           child: const Text('Yes, Paid'),
         ),
       ],
+    );
+  }
+}
+
+// =============================================================================
+// CASHFREE PAYMENT SHEET
+// Shows payment details, initiates payout via edge function, then uses
+// Supabase Realtime to watch the record for automatic status update.
+// =============================================================================
+
+class _CashfreePaymentSheet extends StatefulWidget {
+  final WidgetRef ref;
+  final String referenceType;
+  final String referenceId;
+  final String payeeName;
+  final double amount;
+  final String callerProfileId;
+
+  const _CashfreePaymentSheet({
+    required this.ref,
+    required this.referenceType,
+    required this.referenceId,
+    required this.payeeName,
+    required this.amount,
+    required this.callerProfileId,
+  });
+
+  @override
+  State<_CashfreePaymentSheet> createState() => _CashfreePaymentSheetState();
+}
+
+class _CashfreePaymentSheetState extends State<_CashfreePaymentSheet> {
+  _PayState _state = _PayState.idle;
+  String? _errorMessage;
+  String? _utr;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24, right: 24, top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.secondary300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Payment summary card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.primary50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primary200),
+            ),
+            child: Column(
+              children: [
+                Row(children: [
+                  const Icon(Icons.payments_rounded, color: AppColors.primary500),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Pay \u{20B9}${widget.amount.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w800,
+                          fontFamily: 'Inter', color: AppColors.primary600),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                Row(children: [
+                  const SizedBox(width: 34),
+                  Text(
+                    'To: ${widget.payeeName}',
+                    style: const TextStyle(color: AppColors.secondary600),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // State-based UI
+          if (_state == _PayState.idle) ...[
+            const Text(
+              'Payment will be sent directly to their bank account or UPI ID via Cashfree Payouts. You will be notified automatically when it completes.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.secondary500, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                icon: const Icon(Icons.send_rounded),
+                label: const Text('Confirm & Pay Now'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.success500,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _initiatePayout,
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+
+          if (_state == _PayState.processing) ...[
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text('Initiating payment...', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            const Text(
+              'Please wait. Do not close this screen.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.secondary500, fontSize: 12),
+            ),
+          ],
+
+          if (_state == _PayState.waiting) ...[
+            const CircularProgressIndicator(color: AppColors.accent500),
+            const SizedBox(height: 16),
+            const Text('Payment initiated!', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            const Text(
+              'Waiting for bank confirmation via Cashfree...\nThis usually takes a few seconds to a few minutes.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.secondary500, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close (payment continues in background)'),
+            ),
+          ],
+
+          if (_state == _PayState.success) ...[
+            const Icon(Icons.check_circle_rounded, size: 64, color: AppColors.success500),
+            const SizedBox(height: 12),
+            const Text('Payment Successful!',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.success600)),
+            if (_utr != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('UTR: $_utr',
+                      style: const TextStyle(fontSize: 13, color: AppColors.secondary600)),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    onPressed: () => Clipboard.setData(ClipboardData(text: _utr!)),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.success500),
+              child: const Text('Done'),
+            ),
+          ],
+
+          if (_state == _PayState.failed) ...[
+            const Icon(Icons.error_rounded, size: 64, color: AppColors.error500),
+            const SizedBox(height: 12),
+            const Text('Payment Failed',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.error600)),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 6),
+              Text(_errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, color: AppColors.secondary600)),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Close'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => setState(() {
+                      _state = _PayState.idle;
+                      _errorMessage = null;
+                    }),
+                    child: const Text('Retry'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _initiatePayout() async {
+    setState(() => _state = _PayState.processing);
+
+    try {
+      // Call the Supabase edge function
+      final response = await widget.ref
+          .read(supabaseProvider)
+          .functions
+          .invoke('initiate-payout', body: {
+        'reference_type': widget.referenceType,
+        'reference_id': widget.referenceId,
+        'caller_profile_id': widget.callerProfileId,
+      });
+
+      final data = response.data as Map<String, dynamic>?;
+
+      if (data == null || data['success'] != true) {
+        throw Exception(data?['error'] ?? 'Payment initiation failed');
+      }
+
+      // Payment initiated \u{2014} now listen for the webhook result via Realtime
+      if (!mounted) return;
+      setState(() => _state = _PayState.waiting);
+      _listenForResult();
+
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _state = _PayState.failed;
+        _errorMessage = ErrorUtils.friendly(e);
+      });
+    }
+  }
+
+  void _listenForResult() {
+    final table = widget.referenceType == 'payroll' ? 'payroll' : 'expenses';
+    final client = widget.ref.read(supabaseProvider);
+
+    // Supabase Realtime subscription on this specific record.
+    // When the cashfree-webhook edge function updates payment_status,
+    // this fires automatically \u{2014} no polling needed.
+    client
+        .from(table)
+        .stream(primaryKey: ['id'])
+        .eq('id', widget.referenceId)
+        .listen((rows) {
+          if (!mounted) return;
+          if (rows.isEmpty) return;
+
+          final row = rows.first;
+          final status = row['payment_status'] as String?;
+          final utr = row['utr_reference'] as String?;
+
+          if (status == 'paid') {
+            // Invalidate providers so lists refresh
+            if (widget.referenceType == 'payroll') {
+              widget.ref.invalidate(payrollListProvider);
+            } else {
+              widget.ref.invalidate(expensesProvider);
+            }
+            setState(() {
+              _state = _PayState.success;
+              _utr = utr;
+            });
+          } else if (status == 'failed') {
+            setState(() {
+              _state = _PayState.failed;
+              _errorMessage =
+                  'Cashfree could not complete the payment. The amount will be reversed if debited. Please check the bank details and retry.';
+            });
+          }
+        });
+  }
+}
+
+enum _PayState { idle, processing, waiting, success, failed }
+
+// =============================================================================
+// CashfreePayButton \u{2014} drop-in widget used in both PayrollCardWithPay and
+// ExpenseListScreen. Shows a single "Pay" button when payment module is
+// enabled, otherwise falls back to the existing Mark as Paid flow.
+// =============================================================================
+
+class CashfreePayButton extends ConsumerWidget {
+  final String referenceType; // 'payroll' or 'expense'
+  final String referenceId;
+  final String payeeName;
+  final double amount;
+  final String currentPaymentStatus; // 'unpaid', 'initiated', 'paid', 'failed'
+  final VoidCallback onMarkPaid; // fallback for when module is off
+
+  const CashfreePayButton({
+    super.key,
+    required this.referenceType,
+    required this.referenceId,
+    required this.payeeName,
+    required this.amount,
+    required this.currentPaymentStatus,
+    required this.onMarkPaid,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final paymentEnabled = ref.watch(paymentModuleEnabledProvider);
+
+    if (currentPaymentStatus == 'paid') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.success50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.success300),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle_rounded, size: 14, color: AppColors.success500),
+            SizedBox(width: 6),
+            Text('Paid', style: TextStyle(color: AppColors.success600, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
+    }
+
+    if (currentPaymentStatus == 'initiated') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.accent50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.accent300),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 12, height: 12,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent600),
+            ),
+            SizedBox(width: 6),
+            Text('Processing...', style: TextStyle(color: AppColors.accent700, fontWeight: FontWeight.w600, fontSize: 12)),
+          ],
+        ),
+      );
+    }
+
+    if (paymentEnabled) {
+      return ElevatedButton.icon(
+        icon: const Icon(Icons.send_rounded, size: 16),
+        label: Text('Pay \u{20B9}${CurrencyUtils.format(amount)}'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.success500,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        onPressed: () => UpiPaymentHelper.payViaCashfree(
+          context: context,
+          ref: ref,
+          referenceType: referenceType,
+          referenceId: referenceId,
+          payeeName: payeeName,
+          amount: amount,
+        ),
+      );
+    }
+
+    // Fallback: Mark as Paid manually
+    return OutlinedButton.icon(
+      icon: const Icon(Icons.check_rounded, size: 16),
+      label: const Text('Mark as Paid'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.primary600,
+        side: const BorderSide(color: AppColors.primary400),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      onPressed: onMarkPaid,
     );
   }
 }
