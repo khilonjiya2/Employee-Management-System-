@@ -54,7 +54,7 @@ class _ForcePasswordChangeScreenState
       ref.invalidate(currentProfileProvider);
       await ref.read(currentProfileProvider.future);
 
-      // Wait for GoRouter's auth stream to settle — employees trigger
+      // Wait for GoRouter's auth stream to settle \u{2014} employees trigger
       // two stream events (password + user_metadata), causing a stale
       // redirect on the second event without this delay.
       await Future.delayed(const Duration(milliseconds: 300));
