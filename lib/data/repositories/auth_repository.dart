@@ -159,6 +159,17 @@ class EmployeeRepository {
   }
 
   Future<EmployeeModel> create(Map<String, dynamic> data) async {
+    // Ensure company_id is set — the form doesn't include it so we pull it
+    // from the current user's profile.
+    final profile = _client.auth.currentUser;
+    if (!data.containsKey('company_id') || data['company_id'] == null) {
+      final profileRow = await _client
+          .from('profiles')
+          .select('company_id')
+          .eq('id', profile!.id)
+          .single();
+      data['company_id'] = profileRow['company_id'];
+    }
     final companyId = data['company_id'] as String?;
     final code = await _client.rpc(
       'generate_employee_code',
