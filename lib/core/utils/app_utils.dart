@@ -14,6 +14,9 @@ class ErrorUtils {
     if (raw.contains('already registered to another account')) {
       return 'This UPI ID is already registered to another account. Please use a different one.';
     }
+    if (raw.contains('mobile number is already registered')) {
+      return 'This mobile number is already used by another account. Each mobile number must be unique.';
+    }
     if (raw.contains('Login already exists for this employee code')) {
       return 'A login already exists for this employee.';
     }
