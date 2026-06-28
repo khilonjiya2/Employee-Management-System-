@@ -404,6 +404,7 @@ class _SupervisorFormScreenState
             backgroundColor: AppColors.success500,
           ),
         );
+        ref.invalidate(supervisorsProvider);
         context.pop();
       }
     } catch (e) {
