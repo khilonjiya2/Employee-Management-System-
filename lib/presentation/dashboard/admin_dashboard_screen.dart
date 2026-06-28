@@ -331,7 +331,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.account_balance_rounded,
                   iconColor: AppColors.primary500,
                   iconBg: AppColors.primary50,
-                  onTap: () => context.push('/payroll'),
+                  onTap: () => context.push('/payroll/overview/liability'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -342,7 +342,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.payments_rounded,
                   iconColor: AppColors.success500,
                   iconBg: const Color(0xFFE8F5E9),
-                  onTap: () => context.push('/payroll/filter/paid'),
+                  onTap: () => context.push('/payroll/overview/paid'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -353,7 +353,7 @@ class _DashboardBody extends StatelessWidget {
                   icon: Icons.hourglass_bottom_rounded,
                   iconColor: AppColors.accent500,
                   iconBg: const Color(0xFFFFF8E1),
-                  onTap: () => context.push('/payroll/filter/processed'),
+                  onTap: () => context.push('/payroll/overview/pending'),
                 ),
               ),
             ],
@@ -743,10 +743,8 @@ class _SupervisorDashboardScreenState
                   Text(
                     "Expenses \u{B7} $monthLabel",
                     style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Inter',
-                      color: Color(0xFF8A8FA3),
+                      fontSize: 13, fontWeight: FontWeight.w600,
+                      fontFamily: 'Inter', color: Color(0xFF8A8FA3),
                     ),
                   ),
 
@@ -761,7 +759,8 @@ class _SupervisorDashboardScreenState
                           icon: Icons.receipt_long_rounded,
                           iconColor: AppColors.accent500,
                           iconBg: const Color(0xFFFFF8E1),
-                          onTap: () => context.push('/expenses'),
+                          // Item 10: navigate to expenses filtered to pending (supervisor's own)
+                          onTap: () => context.push('/expenses/filter/pending'),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -772,7 +771,8 @@ class _SupervisorDashboardScreenState
                           icon: Icons.check_circle_rounded,
                           iconColor: AppColors.success500,
                           iconBg: const Color(0xFFE8F5E9),
-                          onTap: () => context.push('/expenses'),
+                          // Item 10: navigate to expenses filtered to approved (supervisor's own)
+                          onTap: () => context.push('/expenses/filter/approved'),
                         ),
                       ),
                     ],
@@ -863,6 +863,22 @@ const SizedBox(height: 12),
                       onPressed: () => context.push('/my-bank-details'),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  // Item 12: Supervisor can reset passwords of their assigned employees
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.lock_reset_rounded, size: 18),
+                      label: const Text('Reset Employee Password'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.warning600,
+                        side: const BorderSide(color: AppColors.warning500),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => _showSupervisorResetPassword(context, ref),
+                    ),
+                  ),
 
                   const SizedBox(height: 100),
                 ],
@@ -870,6 +886,21 @@ const SizedBox(height: 12),
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _showSupervisorResetPassword(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        expand: false,
+        builder: (ctx, controller) =>
+            _SupervisorResetPasswordSheet(scrollController: controller, ref: ref),
       ),
     );
   }
@@ -955,6 +986,7 @@ void _showMyPayslips(BuildContext context) {
         0, (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0));
 
     return {
+      'supervisor_id': supervisorId,
       'total_employees': (employees as List).length,
       'today_submitted': todayAtt != null,
       'pending_today': sumAmount(pendingThisMonth as List),
@@ -997,6 +1029,133 @@ class _SupervisorPayslipsScreen extends ConsumerWidget {
   }
 }
 
+// Item 12: Supervisor can reset passwords of their assigned employees only
+class _SupervisorResetPasswordSheet extends StatefulWidget {
+  final ScrollController scrollController;
+  final WidgetRef ref;
+  const _SupervisorResetPasswordSheet({required this.scrollController, required this.ref});
+
+  @override
+  State<_SupervisorResetPasswordSheet> createState() => _SupervisorResetPasswordSheetState();
+}
+
+class _SupervisorResetPasswordSheetState extends State<_SupervisorResetPasswordSheet> {
+  List<Map<String, dynamic>> _employees = [];
+  List<Map<String, dynamic>> _filtered = [];
+  bool _isLoading = true;
+  bool _isResetting = false;
+  final _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final client = widget.ref.read(supabaseProvider);
+    final profile = widget.ref.read(currentProfileProvider).valueOrNull;
+    if (profile == null) return;
+    try {
+      // Get supervisor record
+      final sup = await client.from('supervisors').select('id').eq('profile_id', profile.id).maybeSingle();
+      if (sup == null) { setState(() => _isLoading = false); return; }
+      // Get only assigned employees
+      final rows = await client
+          .from('supervisor_employees')
+          .select('employees(id, name, employee_code, profile_id)')
+          .eq('supervisor_id', sup['id']);
+      final emps = <Map<String, dynamic>>[];
+      for (final row in rows as List) {
+        final emp = row['employees'] as Map<String, dynamic>?;
+        if (emp != null && emp['profile_id'] != null) {
+          emps.add({'profile_id': emp['profile_id'], 'name': emp['name'], 'code': emp['employee_code'], 'role': 'Employee'});
+        }
+      }
+      emps.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+      if (mounted) setState(() { _employees = emps; _filtered = emps; _isLoading = false; });
+    } catch (_) { if (mounted) setState(() => _isLoading = false); }
+  }
+
+  void _filter(String q) => setState(() {
+    _filtered = q.isEmpty ? _employees : _employees.where((p) =>
+      (p['name'] as String).toLowerCase().contains(q.toLowerCase()) ||
+      (p['code'] as String).toLowerCase().contains(q.toLowerCase())).toList();
+  });
+
+  Future<void> _reset(Map<String, dynamic> person) async {
+    final confirm = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
+      title: const Text('Reset Password?'),
+      content: Text('Set a temporary password for ${person['name']}. They will be asked to change it on next login.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(d).pop(false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.of(d).pop(true), child: const Text('Reset')),
+      ],
+    ));
+    if (confirm != true || !mounted) return;
+    setState(() => _isResetting = true);
+    try {
+      final profile = widget.ref.read(currentProfileProvider).valueOrNull;
+      final response = await widget.ref.read(supabaseProvider).functions.invoke('admin-reset-password',
+          body: {'user_id': person['profile_id'], 'admin_profile_id': profile?.id});
+      final data = response.data as Map<String, dynamic>?;
+      if (data?['success'] != true) throw Exception(data?['error'] ?? 'Failed');
+      if (mounted) await showDialog(context: context, builder: (d) => AlertDialog(
+        title: const Text('Password Reset'),
+        content: Text('Temporary password for ${person['name']}:\n\n${data!['temp_password']}\n\nShare this securely.'),
+        actions: [FilledButton(onPressed: () => Navigator.of(d).pop(), child: const Text('Done'))],
+      ));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ErrorUtils.friendly(e)), backgroundColor: AppColors.error500));
+    } finally { if (mounted) setState(() => _isResetting = false); }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Reset Employee Password', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 4),
+          const Text('Only your assigned employees are shown.', style: TextStyle(fontSize: 12, color: AppColors.secondary500)),
+          const SizedBox(height: 12),
+          TextField(controller: _searchController, onChanged: _filter,
+              decoration: const InputDecoration(hintText: 'Search by name or code', prefixIcon: Icon(Icons.search_rounded))),
+        ]),
+      ),
+      const Divider(height: 1),
+      if (_isResetting) const LinearProgressIndicator(),
+      Expanded(
+        child: _isLoading ? const Center(child: CircularProgressIndicator())
+            : _filtered.isEmpty ? const Center(child: Text('No assigned employees found'))
+            : ListView.separated(
+                controller: widget.scrollController,
+                itemCount: _filtered.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, i) {
+                  final p = _filtered[i];
+                  return ListTile(
+                    leading: CircleAvatar(backgroundColor: AppColors.primary100,
+                        child: Text((p['name'] as String)[0].toUpperCase())),
+                    title: Text(p['name'] as String),
+                    subtitle: Text('Employee \u{2022} ${p['code']}'),
+                    trailing: const Icon(Icons.lock_reset_rounded, size: 20),
+                    onTap: _isResetting ? null : () => _reset(p),
+                  );
+                }),
+      ),
+    ]);
+  }
+}
+
 class _PayslipList extends ConsumerWidget {
   final String supervisorId;
   const _PayslipList({required this.supervisorId});
@@ -1028,7 +1187,40 @@ class _PayslipList extends ConsumerWidget {
               final p = list[i];
               final monthName = DateFormat('MMMM yyyy')
                   .format(DateTime(p.payrollYear, p.payrollMonth));
-              return Container(
+              return InkWell(
+                onTap: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                  builder: (_) => DraggableScrollableSheet(
+                    initialChildSize: 0.65, expand: false,
+                    builder: (_, ctrl) => ListView(controller: ctrl, padding: const EdgeInsets.all(24), children: [
+                      Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.secondary300, borderRadius: BorderRadius.circular(2)))),
+                      const SizedBox(height: 16),
+                      Text('Payslip \u{2014} $monthName', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, fontFamily: 'Inter')),
+                      const SizedBox(height: 4),
+                      w.StatusBadge(status: p.status),
+                      const SizedBox(height: 20),
+                      _PayslipDetailRow('Monthly Salary', CurrencyUtils.format(p.monthlySalary)),
+                      _PayslipDetailRow('Bonus', '+ ${CurrencyUtils.format(p.bonus)}', color: AppColors.success600),
+                      _PayslipDetailRow('Deduction', '- ${CurrencyUtils.format(p.deduction)}', color: AppColors.error600),
+                      const Divider(height: 24),
+                      _PayslipDetailRow('Net Amount', CurrencyUtils.format(p.netAmount), bold: true, color: AppColors.primary600),
+                      if (p.paidAt != null) ...[
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          const Icon(Icons.check_circle_rounded, size: 16, color: AppColors.success500),
+                          const SizedBox(width: 6),
+                          Text('Paid on ${DateFormat('dd MMM yyyy').format(p.paidAt!.toLocal())}', style: const TextStyle(fontSize: 13, color: AppColors.success600)),
+                        ]),
+                      ],
+                      const SizedBox(height: 20),
+                    ]),
+                  ),
+                ),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
@@ -1055,17 +1247,15 @@ class _PayslipList extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(CurrencyUtils.format(p.netAmount),
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(color: AppColors.primary600)),
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.primary600)),
                         const SizedBox(height: 4),
-                        w.StatusBadge(
-                            status: p.isPaid ? 'paid' : p.status),
+                        w.StatusBadge(status: p.isPaid ? 'paid' : p.status),
                       ],
                     ),
+                    const Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.secondary400),
                   ],
                 ),
+              ),
               );
             },
           ),
@@ -1081,3 +1271,22 @@ final _supervisorPayslipProvider = FutureProvider.autoDispose
       .read(supervisorPayrollRepositoryProvider)
       .getForSupervisor(supervisorId);
 });
+
+class _PayslipDetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool bold;
+  final Color? color;
+  const _PayslipDetailRow(this.label, this.value, {this.bold = false, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [
+        Expanded(child: Text(label, style: TextStyle(fontSize: 13, color: AppColors.secondary600, fontWeight: bold ? FontWeight.w700 : FontWeight.w400))),
+        Text(value, style: TextStyle(fontSize: 13, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, fontFamily: 'Inter', color: color ?? AppColors.secondary800)),
+      ]),
+    );
+  }
+}
