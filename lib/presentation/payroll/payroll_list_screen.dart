@@ -61,10 +61,18 @@ class _PayrollListScreenState extends ConsumerState<PayrollListScreen>
       appBar: AppBar(
         title: const Text('Payroll'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.calculate_outlined),
-            onPressed: () => context.push('/payroll/process'),
+          AnimatedBuilder(
+            animation: _tabController,
+            builder: (context, _) => TextButton.icon(
+              icon: const Icon(Icons.calculate_outlined, size: 18),
+              label: Text(_tabController.index == 0 ? 'Process Payroll' : 'Process Supervisor'),
+              onPressed: () => _tabController.index == 0
+                  ? context.push('/payroll/process')
+                  : _showProcessSupervisorPayroll(
+                      context, ref, selectedMonth, allSupervisors.valueOrNull ?? []),
+            ),
           ),
+          const SizedBox(width: 4),
         ],
         bottom: TabBar(
           controller: _tabController,
@@ -217,19 +225,6 @@ class _PayrollListScreenState extends ConsumerState<PayrollListScreen>
             ),
           ),
         ],
-      ),
-      floatingActionButton: AnimatedBuilder(
-        animation: _tabController,
-        builder: (context, _) => FloatingActionButton.extended(
-          onPressed: () => _tabController.index == 0
-              ? context.push('/payroll/process')
-              : _showProcessSupervisorPayroll(
-                  context, ref, selectedMonth, allSupervisors.valueOrNull ?? []),
-          icon: const Icon(Icons.calculate_rounded),
-          label: Text(_tabController.index == 0
-              ? 'Process Payroll'
-              : 'Process Supervisor'),
-        ),
       ),
     );
   }
@@ -538,181 +533,127 @@ class _ProcessSupervisorPayrollSheet extends ConsumerStatefulWidget {
 
 class _ProcessSupervisorPayrollSheetState
     extends ConsumerState<_ProcessSupervisorPayrollSheet> {
-  String? _selectedSupervisorId;
-  final _bonusController = TextEditingController(text: '0');
-  final _deductionController = TextEditingController(text: '0');
+  late Set<String> _selected;
   bool _isProcessing = false;
-  bool _isProcessingAll = false;
 
   @override
-  void dispose() {
-    _bonusController.dispose();
-    _deductionController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _processAll(BuildContext sheetContext) async {
-    setState(() => _isProcessingAll = true);
-    try {
-      final unprocessed = await ref
-          .read(supervisorPayrollRepositoryProvider)
-          .getUnprocessedForMonth(widget.month.month, widget.month.year);
-
-      if (unprocessed.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('All supervisors already have payroll processed for this month')));
-        }
-        setState(() => _isProcessingAll = false);
-        return;
-      }
-
-      // Salary is fixed per supervisor (not attendance-based), so this
-      // can safely run for everyone in one pass with no bonus/deduction
-      // \u{2014} those can still be added individually afterward if needed.
-      for (final supervisor in unprocessed) {
-        await ref.read(supervisorPayrollRepositoryProvider).processMonth(
-              supervisor.id,
-              widget.month.month,
-              widget.month.year,
-              supervisor.monthlySalary,
-            );
-      }
-      ref.invalidate(supervisorPayrollListProvider(widget.month));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Processed payroll for ${unprocessed.length} supervisor(s)'),
-            backgroundColor: AppColors.success500));
-        Navigator.of(sheetContext).pop();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorUtils.friendly(e)), backgroundColor: AppColors.error500),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isProcessingAll = false);
-    }
+  void initState() {
+    super.initState();
+    // Pre-select all supervisors by default (admin can deselect any)
+    _selected = widget.supervisors.map((s) => s.id).toSet();
   }
 
   Future<void> _process(BuildContext sheetContext) async {
-    if (_selectedSupervisorId == null) return;
+    if (_selected.isEmpty) return;
+    final confirm = await w.ConfirmationDialog.show(
+      context,
+      title: 'Process Supervisor Payroll?',
+      message: 'Process payroll for ${_selected.length} supervisor(s) for ${DateFormat('MMMM yyyy').format(widget.month)}? Re-processing will update existing records.',
+      confirmLabel: 'Process',
+      confirmColor: AppColors.primary500,
+    );
+    if (confirm != true || !mounted) return;
+
     setState(() => _isProcessing = true);
-    try {
-      final supervisor =
-          widget.supervisors.firstWhere((s) => s.id == _selectedSupervisorId);
-      await ref.read(supervisorPayrollRepositoryProvider).processMonth(
-            supervisor.id,
-            widget.month.month,
-            widget.month.year,
-            supervisor.monthlySalary,
-            bonus: double.tryParse(_bonusController.text) ?? 0,
-            deduction: double.tryParse(_deductionController.text) ?? 0,
-          );
-      ref.invalidate(supervisorPayrollListProvider(widget.month));
-      if (mounted) Navigator.of(sheetContext).pop();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorUtils.friendly(e)), backgroundColor: AppColors.error500),
+    int success = 0;
+    final List<Map<String,String>> errors = [];
+
+    for (final id in _selected) {
+      final sup = widget.supervisors.firstWhere((s) => s.id == id);
+      try {
+        await ref.read(supervisorPayrollRepositoryProvider).processMonth(
+          sup.id, widget.month.month, widget.month.year, sup.monthlySalary,
         );
+        success++;
+      } catch (e) {
+        errors.add({'name': sup.name, 'reason': ErrorUtils.friendly(e)});
       }
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
+    }
+
+    ref.invalidate(supervisorPayrollListProvider(widget.month));
+    if (!mounted) return;
+    setState(() => _isProcessing = false);
+
+    if (errors.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Payroll processed for $success supervisor(s)'),
+          backgroundColor: AppColors.success500));
+      Navigator.of(sheetContext).pop();
+    } else {
+      await showDialog(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: Text('$success processed, ${errors.length} failed'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: errors.map((e) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('\u{2022} ${e['name']}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text('  ${e['reason']}', style: const TextStyle(color: AppColors.error600, fontSize: 12)),
+                  ],
+                ),
+              )).toList(),
+            ),
+          ),
+          actions: [FilledButton(onPressed: () => Navigator.of(d).pop(), child: const Text('OK'))],
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
+      padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Process Supervisor Payroll', style: Theme.of(context).textTheme.titleLarge),
-          Text(DateFormat('MMMM yyyy').format(widget.month),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.secondary500)),
-          const SizedBox(height: 16),
-          // Supervisor salary is fixed (not attendance-based), so all
-          // unprocessed supervisors can be processed in one click.
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              icon: _isProcessingAll
-                  ? const SizedBox(
-                      height: 16, width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.bolt_rounded, size: 18),
-              label: Text(_isProcessingAll ? 'Processing...' : 'Process All Supervisors (Fixed Salary)'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary600,
-                side: const BorderSide(color: AppColors.primary400),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              onPressed: _isProcessingAll ? null : () => _processAll(context),
+          Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Process Supervisor Payroll', style: Theme.of(context).textTheme.titleLarge),
+              Text(DateFormat('MMMM yyyy').format(widget.month),
+                  style: const TextStyle(color: AppColors.secondary500)),
+            ])),
+            TextButton(
+              onPressed: () => setState(() => _selected = widget.supervisors.map((s) => s.id).toSet()),
+              child: const Text('Select All'),
+            ),
+            TextButton(
+              onPressed: () => setState(() => _selected.clear()),
+              child: const Text('Clear'),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          const Divider(),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 280),
+            child: ListView(
+              shrinkWrap: true,
+              children: widget.supervisors.map((sup) => CheckboxListTile(
+                value: _selected.contains(sup.id),
+                onChanged: (v) => setState(() => v! ? _selected.add(sup.id) : _selected.remove(sup.id)),
+                title: Text(sup.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                subtitle: Text('Fixed salary: \u{20B9}${CurrencyUtils.format(sup.monthlySalary)}',
+                    style: const TextStyle(fontSize: 12)),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              )).toList(),
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: const [
-              Expanded(child: Divider()),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Text('OR process one individually', style: TextStyle(fontSize: 12, color: AppColors.secondary500)),
-              ),
-              Expanded(child: Divider()),
-            ],
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            value: _selectedSupervisorId,
-            decoration: const InputDecoration(labelText: 'Supervisor'),
-            items: widget.supervisors
-                .map((s) => DropdownMenuItem(
-                    value: s.id,
-                    child: Text('${s.name} (\u{20B9}${s.monthlySalary.toStringAsFixed(0)}/mo)')))
-                .toList(),
-            onChanged: (v) => setState(() => _selectedSupervisorId = v),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _bonusController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Bonus'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  controller: _deductionController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Deduction'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: (_selectedSupervisorId == null || _isProcessing)
-                  ? null
-                  : () => _process(context),
+              onPressed: (_selected.isEmpty || _isProcessing) ? null : () => _process(context),
               child: _isProcessing
-                  ? const SizedBox(
-                      height: 20, width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Process'),
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text('Process ${_selected.length} Supervisor(s)'),
             ),
           ),
         ],
@@ -720,6 +661,7 @@ class _ProcessSupervisorPayrollSheetState
     );
   }
 }
+
 
 class _DayBadge extends StatelessWidget {
   final String label;
@@ -787,26 +729,63 @@ class _PayrollProcessScreenState extends ConsumerState<PayrollProcessScreen> {
 
     setState(() => _isProcessing = true);
     int success = 0;
-    List<String> errors = [];
+    final List<Map<String, String>> errors = [];
 
     for (final id in _selectedEmployees) {
+      final emp = _employees.firstWhere((e) => e.id == id, orElse: () => _employees.first);
       try {
         await ref.read(payrollRepositoryProvider).processPayroll(id, _selectedMonth.month, _selectedMonth.year);
         success++;
       } catch (e) {
-        errors.add(e.toString());
+        errors.add({'name': emp.name, 'code': emp.employeeCode, 'reason': e.toString().replaceAll('Exception: ', '')});
       }
     }
 
     if (mounted) {
       setState(() => _isProcessing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Processed $success/${_selectedEmployees.length} employees${errors.isNotEmpty ? ". ${errors.length} errors." : ""}'),
-          backgroundColor: errors.isEmpty ? AppColors.success500 : AppColors.warning500,
-        ),
-      );
-      if (errors.isEmpty) context.pop();
+      if (errors.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Payroll processed for $success employee(s)'), backgroundColor: AppColors.success500),
+        );
+        context.pop();
+      } else {
+        // Show a detailed dialog listing each failure with a plain English reason
+        await showDialog(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text('$success processed, ${errors.length} failed'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (success > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text('\u{2713} $success payroll(s) processed successfully.',
+                          style: const TextStyle(color: AppColors.success600)),
+                    ),
+                  const Text('The following could not be processed:', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  ...errors.map((e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('\u{2022} ${e['name']} (${e['code']})', style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text('  \u{2192} ${e['reason']}', style: const TextStyle(color: AppColors.error600, fontSize: 12)),
+                      ],
+                    ),
+                  )),
+                ],
+              ),
+            ),
+            actions: [
+              FilledButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('OK')),
+            ],
+          ),
+        );
+      }
     }
   }
 
