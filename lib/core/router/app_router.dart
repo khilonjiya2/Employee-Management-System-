@@ -5,6 +5,8 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/repositories/auth_repository.dart';
+import '../../presentation/auth/force_password_change_screen.dart'
+    show passwordChangeInProgress;
 
 import '../../presentation/auth/login_screen.dart';
 import '../../presentation/auth/forgot_password_screen.dart';
@@ -80,6 +82,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // invalidate/refetch window) would bounce the user back here right
       // after they just changed their password.
       if (isLoggedIn && state.matchedLocation != '/change-password') {
+        // Don't redirect if a password change is actively in progress —
+        // the auth state change from updatePassword would otherwise bounce
+        // the user back here on the stale cached profile value.
+        if (passwordChangeInProgress) return null;
+
         final profileAsync = ref.read(currentProfileProvider);
         // Only act on a profile we're CONFIDENT about: it must have data
         // AND not be in the middle of a refetch (isRefreshing == true means
