@@ -1280,7 +1280,7 @@ class _PinVerifySheetState extends ConsumerState<PinVerifySheet> {
                 color: i < _digits.length
                     ? AppColors.primary500
                     : AppColors.secondary200,
-                border: _wrong ? Border.all(color: AppColors.error400) : null,
+                border: _wrong ? Border.all(color: AppColors.error500) : null,
               ),
             )),
           ),
@@ -1490,7 +1490,7 @@ class _PinSetupSheetState extends ConsumerState<PinSetupSheet> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: i < _digits.length ? AppColors.primary500 : AppColors.secondary200,
-                  border: _wrong ? Border.all(color: AppColors.error400) : null,
+                  border: _wrong ? Border.all(color: AppColors.error500) : null,
                 ),
               )),
             ),
