@@ -159,7 +159,11 @@ class EmployeeRepository {
   }
 
   Future<EmployeeModel> create(Map<String, dynamic> data) async {
-    final code = await _client.rpc('generate_employee_code') as String;
+    final companyId = data['company_id'] as String?;
+    final code = await _client.rpc(
+      'generate_employee_code',
+      params: {'p_company_id': companyId},
+    ) as String;
     data['employee_code'] = code;
     data['created_by'] = _client.auth.currentUser?.id;
     final supervisorId = data.remove('supervisor_id');
