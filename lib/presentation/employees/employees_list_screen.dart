@@ -116,27 +116,17 @@ class _EmployeesListScreenState extends ConsumerState<EmployeesListScreen> {
               ref.read(employeesProvider.notifier).filterStatus(value);
             },
             itemBuilder: (context) => [
-              CheckedPopupMenuItem<String?>(
-                value: null,
-                checked: _selectedStatus == null,
-                child: const Text('All'),
-              ),
-              CheckedPopupMenuItem<String?>(
-                value: 'active',
-                checked: _selectedStatus == 'active',
-                child: const Text('Active'),
-              ),
-              CheckedPopupMenuItem<String?>(
-                value: 'inactive',
-                checked: _selectedStatus == 'inactive',
-                child: const Text('Inactive'),
-              ),
+              CheckedPopupMenuItem<String?>(value: null, checked: _selectedStatus == null, child: const Text('All')),
+              CheckedPopupMenuItem<String?>(value: 'active', checked: _selectedStatus == 'active', child: const Text('Active')),
+              CheckedPopupMenuItem<String?>(value: 'inactive', checked: _selectedStatus == 'inactive', child: const Text('Inactive')),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.add_rounded),
+          TextButton.icon(
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Add Employee'),
             onPressed: () => context.push('/employees/new'),
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Column(

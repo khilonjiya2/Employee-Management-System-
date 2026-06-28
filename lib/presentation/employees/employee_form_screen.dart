@@ -220,8 +220,12 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
                 TextFormField(
                   controller: _mobileController,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Mobile Number', prefixIcon: Icon(Icons.phone_outlined)),
-                  validator: ValidationUtils.validateMobile,
+                  decoration: const InputDecoration(labelText: 'Mobile Number *', prefixIcon: Icon(Icons.phone_outlined)),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Mobile number is required';
+                    if (!RegExp(r'^\d{10}$').hasMatch(v.trim())) return 'Enter a valid 10-digit mobile number';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
