@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,7 +10,7 @@ import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart';
-import '../payroll/payroll_list_screen.dart' show payrollListProvider;
+import '../payroll/payroll_list_screen.dart' show payrollListProvider, supervisorPayrollListProvider;
 import '../expenses/expenses_list_screen.dart' show expensesProvider;
 
 class StatCard extends StatelessWidget {
@@ -364,14 +367,13 @@ class UpiPaymentHelper {
   // ---------------------------------------------------------------------------
   // Cashfree Payouts: server-side payment initiation via edge function.
   // Used when payment_module_enabled = true in the company's settings.
-  // The edge function calls Cashfree API, which then calls our webhook
-  // to auto-update the status when payment succeeds or fails.
+  // Requires a valid payout PIN to be set and verified before proceeding.
   // ---------------------------------------------------------------------------
 
   static Future<void> payViaCashfree({
     required BuildContext context,
     required WidgetRef ref,
-    required String referenceType, // 'payroll' or 'expense'
+    required String referenceType, // 'payroll', 'expense', or 'supervisor_payroll'
     required String referenceId,
     required String payeeName,
     required double amount,
@@ -379,11 +381,64 @@ class UpiPaymentHelper {
     final profile = ref.read(currentProfileProvider).valueOrNull;
     if (profile == null) return;
 
-    // Show the payment sheet
+    // ── PIN gate ──────────────────────────────────────────────────────────
+    final client = ref.read(supabaseProvider);
+    final companyId = profile.companyId;
+    if (companyId == null) return;
+
+    // Check if PIN is set
+    final companyRow = await client
+        .from('companies')
+        .select('payout_pin_hash')
+        .eq('id', companyId)
+        .maybeSingle();
+
+    final storedHash = companyRow?['payout_pin_hash'] as String?;
+
     if (!context.mounted) return;
+
+    if (storedHash == null || storedHash.trim().isEmpty) {
+      // No PIN set — prompt to create one in settings
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Payout PIN Required'),
+          content: const Text(
+            'You must set a 4-digit payout PIN before initiating payments.\n\nGo to Settings → Payout PIN to create one.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // PIN is set — ask user to enter it
+    if (!context.mounted) return;
+    final pinVerified = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => PinVerifySheet(storedHash: storedHash, companyId: companyId),
+    );
+
+    if (pinVerified != true) return;
+    if (!context.mounted) return;
+    // ── PIN verified — proceed to payment ────────────────────────────────
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: false,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => _CashfreePaymentSheet(
@@ -829,6 +884,15 @@ class _CashfreePaymentSheetState extends State<_CashfreePaymentSheet> {
   _PayState _state = _PayState.idle;
   String? _errorMessage;
   String? _utr;
+  StreamSubscription<List<Map<String, dynamic>>>? _realtimeSub;
+  Timer? _timeoutTimer;
+
+  @override
+  void dispose() {
+    _realtimeSub?.cancel();
+    _timeoutTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1044,13 +1108,34 @@ class _CashfreePaymentSheetState extends State<_CashfreePaymentSheet> {
   }
 
   void _listenForResult() {
-    final table = widget.referenceType == 'payroll' ? 'payroll' : 'expenses';
+    _realtimeSub?.cancel();
+    _timeoutTimer?.cancel();
+
+    final String table;
+    if (widget.referenceType == 'payroll') {
+      table = 'payroll';
+    } else if (widget.referenceType == 'supervisor_payroll') {
+      table = 'supervisor_payroll';
+    } else {
+      table = 'expenses';
+    }
+
     final client = widget.ref.read(supabaseProvider);
 
-    // Supabase Realtime subscription on this specific record.
-    // When the cashfree-webhook edge function updates payment_status,
-    // this fires automatically \u{2014} no polling needed.
-    client
+    // 3-minute timeout: if Cashfree webhook hasn't arrived, stop waiting
+    _timeoutTimer = Timer(const Duration(minutes: 3), () {
+      if (!mounted) return;
+      if (_state == _PayState.waiting) {
+        _realtimeSub?.cancel();
+        setState(() {
+          _state = _PayState.failed;
+          _errorMessage =
+              'Payment status is still pending after 3 minutes. Check your Cashfree dashboard and manually mark as paid if the transfer succeeded.';
+        });
+      }
+    });
+
+    _realtimeSub = client
         .from(table)
         .stream(primaryKey: ['id'])
         .eq('id', widget.referenceId)
@@ -1063,9 +1148,12 @@ class _CashfreePaymentSheetState extends State<_CashfreePaymentSheet> {
           final utr = row['utr_reference'] as String?;
 
           if (status == 'paid') {
-            // Invalidate providers so lists refresh
+            _realtimeSub?.cancel();
+            _timeoutTimer?.cancel();
             if (widget.referenceType == 'payroll') {
               widget.ref.invalidate(payrollListProvider);
+            } else if (widget.referenceType == 'supervisor_payroll') {
+              widget.ref.invalidate(supervisorPayrollListProvider);
             } else {
               widget.ref.invalidate(expensesProvider);
             }
@@ -1074,6 +1162,8 @@ class _CashfreePaymentSheetState extends State<_CashfreePaymentSheet> {
               _utr = utr;
             });
           } else if (status == 'failed') {
+            _realtimeSub?.cancel();
+            _timeoutTimer?.cancel();
             setState(() {
               _state = _PayState.failed;
               _errorMessage =
@@ -1085,6 +1175,370 @@ class _CashfreePaymentSheetState extends State<_CashfreePaymentSheet> {
 }
 
 enum _PayState { idle, processing, waiting, success, failed }
+
+// =============================================================================
+// PIN UTILITIES
+// Pins are stored as SHA-256(pin + ':' + companyId) so they are per-company.
+// The raw PIN never leaves the device after hashing.
+// =============================================================================
+
+String _hashPin(String pin, String companyId) {
+  final bytes = utf8.encode('$pin:$companyId');
+  return sha256.convert(bytes).toString();
+}
+
+// =============================================================================
+// PIN ENTRY SHEET — shown before every Cashfree payout
+// =============================================================================
+class PinVerifySheet extends ConsumerStatefulWidget {
+  final String storedHash;
+  final String companyId;
+  const PinVerifySheet({super.key, required this.storedHash, required this.companyId});
+
+  @override
+  ConsumerState<PinVerifySheet> createState() => _PinVerifySheetState();
+}
+
+class _PinVerifySheetState extends ConsumerState<PinVerifySheet> {
+  final List<String> _digits = [];
+  bool _wrong = false;
+  int _attempts = 0;
+
+  void _onDigit(String d) {
+    if (_digits.length >= 4) return;
+    setState(() {
+      _digits.add(d);
+      _wrong = false;
+    });
+    if (_digits.length == 4) _verify();
+  }
+
+  void _onDelete() {
+    if (_digits.isEmpty) return;
+    setState(() => _digits.removeLast());
+  }
+
+  void _verify() {
+    final entered = _digits.join();
+    final hash = _hashPin(entered, widget.companyId);
+    if (hash == widget.storedHash) {
+      Navigator.of(context).pop(true);
+    } else {
+      _attempts++;
+      setState(() {
+        _digits.clear();
+        _wrong = true;
+      });
+      if (_attempts >= 5) {
+        Navigator.of(context).pop(false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24, right: 24, top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.secondary300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Icon(Icons.lock_rounded, size: 36, color: AppColors.primary500),
+          const SizedBox(height: 12),
+          const Text(
+            'Enter Payout PIN',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, fontFamily: 'Inter'),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _wrong ? 'Incorrect PIN. Try again.' : 'Enter your 4-digit security PIN to proceed',
+            style: TextStyle(
+              color: _wrong ? AppColors.error500 : AppColors.secondary500,
+              fontSize: 13,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          // PIN dots
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(4, (i) => Container(
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              width: 16, height: 16,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: i < _digits.length
+                    ? AppColors.primary500
+                    : AppColors.secondary200,
+                border: _wrong ? Border.all(color: AppColors.error400) : null,
+              ),
+            )),
+          ),
+          const SizedBox(height: 28),
+          // Numpad
+          ...[ ['1','2','3'], ['4','5','6'], ['7','8','9'], ['','0','⌫'] ].map((row) =>
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: row.map((k) {
+                  if (k == '') return const SizedBox(width: 80, height: 56);
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: SizedBox(
+                      width: 80, height: 56,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          side: const BorderSide(color: AppColors.secondary200),
+                          padding: EdgeInsets.zero,
+                        ),
+                        onPressed: k == '⌫' ? _onDelete : () => _onDigit(k),
+                        child: Text(
+                          k,
+                          style: TextStyle(
+                            fontSize: k == '⌫' ? 20 : 22,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Inter',
+                            color: AppColors.secondary800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// PIN SETUP SHEET — used in Settings to create or change the payout PIN
+// =============================================================================
+
+class PinSetupSheet extends ConsumerStatefulWidget {
+  /// If non-null, user must first confirm the old PIN before setting a new one.
+  final String? existingHash;
+  final String companyId;
+
+  const PinSetupSheet({
+    super.key,
+    required this.companyId,
+    this.existingHash,
+  });
+
+  @override
+  ConsumerState<PinSetupSheet> createState() => _PinSetupSheetState();
+}
+
+class _PinSetupSheetState extends ConsumerState<PinSetupSheet> {
+  // Steps: 'verify_old' | 'enter_new' | 'confirm_new'
+  String _step = 'enter_new';
+  final List<String> _digits = [];
+  List<String> _firstPin = [];
+  bool _wrong = false;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _step = widget.existingHash != null ? 'verify_old' : 'enter_new';
+  }
+
+  String get _title {
+    switch (_step) {
+      case 'verify_old': return 'Confirm Current PIN';
+      case 'enter_new': return widget.existingHash != null ? 'Enter New PIN' : 'Create Payout PIN';
+      case 'confirm_new': return 'Confirm New PIN';
+      default: return '';
+    }
+  }
+
+  String get _subtitle {
+    switch (_step) {
+      case 'verify_old': return 'Enter your current 4-digit PIN to continue';
+      case 'enter_new': return 'Choose a 4-digit PIN for authorising payouts';
+      case 'confirm_new': return 'Enter the PIN again to confirm';
+      default: return '';
+    }
+  }
+
+  void _onDigit(String d) {
+    if (_digits.length >= 4) return;
+    setState(() {
+      _digits.add(d);
+      _wrong = false;
+    });
+    if (_digits.length == 4) _handleFull();
+  }
+
+  void _onDelete() {
+    if (_digits.isEmpty) return;
+    setState(() => _digits.removeLast());
+  }
+
+  void _handleFull() async {
+    final entered = _digits.join();
+
+    if (_step == 'verify_old') {
+      final hash = _hashPin(entered, widget.companyId);
+      if (hash == widget.existingHash) {
+        setState(() { _digits.clear(); _step = 'enter_new'; _wrong = false; });
+      } else {
+        setState(() { _digits.clear(); _wrong = true; });
+      }
+      return;
+    }
+
+    if (_step == 'enter_new') {
+      _firstPin = List.from(_digits);
+      setState(() { _digits.clear(); _step = 'confirm_new'; _wrong = false; });
+      return;
+    }
+
+    if (_step == 'confirm_new') {
+      if (entered == _firstPin.join()) {
+        await _save(entered);
+      } else {
+        setState(() { _digits.clear(); _firstPin.clear(); _step = 'enter_new'; _wrong = true; });
+      }
+    }
+  }
+
+  Future<void> _save(String pin) async {
+    setState(() => _saving = true);
+    try {
+      final hash = _hashPin(pin, widget.companyId);
+      await ref.read(supabaseProvider)
+          .from('companies')
+          .update({'payout_pin_hash': hash})
+          .eq('id', widget.companyId);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() { _saving = false; _digits.clear(); _step = 'enter_new'; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving PIN: $e'), backgroundColor: AppColors.error500),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24, right: 24, top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(color: AppColors.secondary300, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 24),
+          Icon(
+            widget.existingHash != null ? Icons.lock_reset_rounded : Icons.lock_outline_rounded,
+            size: 36, color: AppColors.primary500,
+          ),
+          const SizedBox(height: 12),
+          Text(_title,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, fontFamily: 'Inter')),
+          const SizedBox(height: 6),
+          Text(
+            _wrong
+                ? (_step == 'verify_old' ? 'Incorrect current PIN.' : 'PINs do not match. Try again.')
+                : _subtitle,
+            style: TextStyle(
+              color: _wrong ? AppColors.error500 : AppColors.secondary500,
+              fontSize: 13,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          if (_saving) ...[
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text('Saving PIN...'),
+          ] else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(4, (i) => Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                width: 16, height: 16,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: i < _digits.length ? AppColors.primary500 : AppColors.secondary200,
+                  border: _wrong ? Border.all(color: AppColors.error400) : null,
+                ),
+              )),
+            ),
+            const SizedBox(height: 28),
+            ...[ ['1','2','3'], ['4','5','6'], ['7','8','9'], ['','0','⌫'] ].map((row) =>
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: row.map((k) {
+                    if (k == '') return const SizedBox(width: 80, height: 56);
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: SizedBox(
+                        width: 80, height: 56,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            side: const BorderSide(color: AppColors.secondary200),
+                            padding: EdgeInsets.zero,
+                          ),
+                          onPressed: k == '⌫' ? _onDelete : () => _onDigit(k),
+                          child: Text(k,
+                            style: TextStyle(
+                              fontSize: k == '⌫' ? 20 : 22,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Inter',
+                              color: AppColors.secondary800,
+                            )),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          if (!_saving)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+        ],
+      ),
+    );
+  }
+}
 
 // =============================================================================
 // CashfreePayButton \u{2014} drop-in widget used in both PayrollCardWithPay and
