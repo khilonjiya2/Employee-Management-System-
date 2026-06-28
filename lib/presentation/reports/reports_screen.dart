@@ -101,12 +101,35 @@ class _AttendanceReportState extends ConsumerState<_AttendanceReport> {
       _hasSearched = true;
     });
     try {
+      final profile = ref.read(currentProfileProvider).valueOrNull;
+      final isSupervisor = profile?.role == 'supervisor';
+
+      List<String>? supervisorEmployeeIds;
+      if (isSupervisor) {
+        // Get supervisor's own ID
+        final client = ref.read(supabaseProvider);
+        final sup = await client.from('supervisors').select('id').eq('profile_id', profile!.id).maybeSingle();
+        if (sup != null) {
+          final rows = await client.from('supervisor_employees').select('employee_id').eq('supervisor_id', sup['id']);
+          supervisorEmployeeIds = (rows as List).map((r) => r['employee_id'] as String).toList();
+        }
+      }
+
       final data = await ref.read(attendanceRepositoryProvider).getAll(
             fromDate: _fromDate,
             toDate: _toDate,
             limit: 500,
           );
-      setState(() => _data = data);
+
+      // Filter to supervisor's employees only if supervisor role
+      final filtered = supervisorEmployeeIds != null
+          ? data.where((att) {
+              att.details?.retainWhere((d) => supervisorEmployeeIds!.contains(d.employeeId));
+              return att.details?.isNotEmpty == true;
+            }).toList()
+          : data;
+
+      setState(() => _data = filtered);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -549,6 +572,15 @@ class _ExpenseReportState extends ConsumerState<_ExpenseReport> {
       _hasSearched = true;
     });
     try {
+      final profile = ref.read(currentProfileProvider).valueOrNull;
+      final isSupervisor = profile?.role == 'supervisor';
+      String? mySupervisorId;
+      if (isSupervisor) {
+        final client = ref.read(supabaseProvider);
+        final sup = await client.from('supervisors').select('id').eq('profile_id', profile!.id).maybeSingle();
+        mySupervisorId = sup?['id'] as String?;
+      }
+
       final data = await ref.read(expenseRepositoryProvider).getAll(
             category: _category,
             status: _status,
@@ -556,7 +588,10 @@ class _ExpenseReportState extends ConsumerState<_ExpenseReport> {
             toDate: _toDate,
             limit: 500,
           );
-      setState(() => _data = data);
+
+      setState(() => _data = mySupervisorId != null
+          ? data.where((e) => e.supervisorId == mySupervisorId).toList()
+          : data);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -935,15 +970,24 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
   bool _hasSearched = false;
 
   Future<void> _load() async {
-    setState(() {
-      _isLoading = true;
-      _hasSearched = true;
-    });
+    setState(() { _isLoading = true; _hasSearched = true; });
     try {
-      final data = await ref
-          .read(payrollRepositoryProvider)
-          .getByMonthYear(_selectedMonth.month, _selectedMonth.year);
-      setState(() => _data = data);
+      final profile = ref.read(currentProfileProvider).valueOrNull;
+      final isSupervisor = profile?.role == 'supervisor';
+      List<String>? supervisorEmployeeIds;
+      if (isSupervisor) {
+        final client = ref.read(supabaseProvider);
+        final sup = await client.from('supervisors').select('id').eq('profile_id', profile!.id).maybeSingle();
+        if (sup != null) {
+          final rows = await client.from('supervisor_employees').select('employee_id').eq('supervisor_id', sup['id']);
+          supervisorEmployeeIds = (rows as List).map((r) => r['employee_id'] as String).toList();
+        }
+      }
+
+      final data = await ref.read(payrollRepositoryProvider).getByMonthYear(_selectedMonth.month, _selectedMonth.year);
+      setState(() => _data = supervisorEmployeeIds != null
+          ? data.where((p) => supervisorEmployeeIds!.contains(p.employeeId)).toList()
+          : data);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
