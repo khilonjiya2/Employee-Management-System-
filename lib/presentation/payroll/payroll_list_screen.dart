@@ -65,7 +65,7 @@ class _PayrollListScreenState extends ConsumerState<PayrollListScreen>
             animation: _tabController,
             builder: (context, _) => TextButton.icon(
               icon: const Icon(Icons.calculate_outlined, size: 18),
-              label: Text(_tabController.index == 0 ? 'Process Payroll' : 'Process Supervisor'),
+              label: Text(_tabController.index == 0 ? 'Process Payroll' : 'Process Payroll'),
               onPressed: () => _tabController.index == 0
                   ? context.push('/payroll/process')
                   : _showProcessSupervisorPayroll(
@@ -504,7 +504,7 @@ class _SupervisorPayrollCard extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: w.CashfreePayButton(
-                referenceType: 'expense', // supervisors are paid like expense reimbursements
+                referenceType: 'supervisor_payroll',
                 referenceId: record.id,
                 payeeName: supervisor.name,
                 amount: record.netAmount,
@@ -638,7 +638,7 @@ class _ProcessSupervisorPayrollSheetState
                 value: _selected.contains(sup.id),
                 onChanged: (v) => setState(() => v! ? _selected.add(sup.id) : _selected.remove(sup.id)),
                 title: Text(sup.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                subtitle: Text('Fixed salary: \u{20B9}${CurrencyUtils.format(sup.monthlySalary)}',
+                subtitle: Text('Fixed salary: ${CurrencyUtils.format(sup.monthlySalary)}',
                     style: const TextStyle(fontSize: 12)),
                 dense: true,
                 contentPadding: EdgeInsets.zero,
