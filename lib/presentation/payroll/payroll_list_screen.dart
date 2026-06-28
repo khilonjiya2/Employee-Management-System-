@@ -545,7 +545,7 @@ class _ProcessSupervisorPayrollSheetState
 
   Future<void> _process(BuildContext sheetContext) async {
     if (_selected.isEmpty) return;
-    final confirm = await w.ConfirmationDialog.show(
+    final confirm = await w.ConfirmDialog.show(
       context,
       title: 'Process Supervisor Payroll?',
       message: 'Process payroll for ${_selected.length} supervisor(s) for ${DateFormat('MMMM yyyy').format(widget.month)}? Re-processing will update existing records.',
