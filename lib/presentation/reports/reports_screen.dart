@@ -1237,6 +1237,7 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
                         ],
                       ],
                     ),
+        ),
       ],
     );
   }
