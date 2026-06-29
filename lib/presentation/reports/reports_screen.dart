@@ -22,12 +22,14 @@ class ReportsScreen extends ConsumerStatefulWidget {
 
 class _ReportsScreenState extends ConsumerState<ReportsScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
+  late TabController _tabController;
+  bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _isAdmin = ref.read(currentUserRoleProvider) == 'admin';
+    _tabController = TabController(length: _isAdmin ? 3 : 2, vsync: this);
   }
 
   @override
@@ -43,19 +45,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
         title: const Text('Reports'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Attendance'),
-            Tab(text: 'Expenses'),
-            Tab(text: 'Payroll'),
+          tabs: [
+            const Tab(text: 'Attendance'),
+            const Tab(text: 'Expenses'),
+            if (_isAdmin) const Tab(text: 'Payroll'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: const [
-          _AttendanceReport(),
-          _ExpenseReport(),
-          _PayrollReport(),
+        children: [
+          const _AttendanceReport(),
+          const _ExpenseReport(),
+          if (_isAdmin) const _PayrollReport(),
         ],
       ),
     );
@@ -965,44 +967,33 @@ class _PayrollReport extends ConsumerStatefulWidget {
 class _PayrollReportState extends ConsumerState<_PayrollReport> {
   DateTime _selectedMonth =
       DateTime(DateTime.now().year, DateTime.now().month);
-  List<PayrollModel> _data = [];
+  List<PayrollModel> _employeeData = [];
+  List<SupervisorPayrollModel> _supervisorData = [];
   bool _isLoading = false;
   bool _hasSearched = false;
 
   Future<void> _load() async {
     setState(() { _isLoading = true; _hasSearched = true; });
     try {
-      final profile = ref.read(currentProfileProvider).valueOrNull;
-      final isSupervisor = profile?.role == 'supervisor';
-      List<String>? supervisorEmployeeIds;
-      if (isSupervisor) {
-        final client = ref.read(supabaseProvider);
-        final sup = await client.from('supervisors').select('id').eq('profile_id', profile!.id).maybeSingle();
-        if (sup != null) {
-          final rows = await client.from('supervisor_employees').select('employee_id').eq('supervisor_id', sup['id']);
-          supervisorEmployeeIds = (rows as List).map((r) => r['employee_id'] as String).toList();
-        }
-      }
-
-      final data = await ref.read(payrollRepositoryProvider).getByMonthYear(_selectedMonth.month, _selectedMonth.year);
-      setState(() => _data = supervisorEmployeeIds != null
-          ? data.where((p) => supervisorEmployeeIds!.contains(p.employeeId)).toList()
-          : data);
+      final empData = await ref.read(payrollRepositoryProvider)
+          .getByMonthYear(_selectedMonth.month, _selectedMonth.year);
+      final supData = await ref.read(supervisorPayrollRepositoryProvider)
+          .getByMonthYear(_selectedMonth.month, _selectedMonth.year);
+      setState(() {
+        _employeeData = empData;
+        _supervisorData = supData;
+      });
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _sharePdf() async {
-    final totalGross =
-        _data.fold<double>(0, (s, p) => s + p.grossWage);
-    final totalNet = _data.fold<double>(0, (s, p) => s + p.netWage);
-    final totalDeductions = _data.fold<double>(
-        0, (s, p) => s + p.advanceDeduction + p.penaltyDeduction);
-    final paid =
-        _data.where((p) => p.status == 'paid').length;
-    final pending =
-        _data.where((p) => p.status != 'paid').length;
+    final empGross = _employeeData.fold<double>(0, (s, p) => s + p.grossWage);
+    final empNet   = _employeeData.fold<double>(0, (s, p) => s + p.netWage);
+    final empDed   = _employeeData.fold<double>(0, (s, p) => s + p.advanceDeduction + p.penaltyDeduction);
+    final supNet   = _supervisorData.fold<double>(0, (s, p) => s + p.netAmount);
+    final totalNet = empNet + supNet;
 
     final pdf = pw.Document();
     pdf.addPage(
@@ -1013,59 +1004,63 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
             level: 0,
             child: pw.Text(
                 'Payroll Report - ${DateFormat('MMMM yyyy').format(_selectedMonth)}',
-                style: pw.TextStyle(
-                    fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
           ),
           pw.SizedBox(height: 8),
           pw.Row(children: [
-            pw.Text('Total Gross: Rs.${totalGross.toStringAsFixed(2)}  ',
+            pw.Text('Emp Gross: Rs.${empGross.toStringAsFixed(2)}  ',
                 style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            pw.Text(
-                'Total Deductions: Rs.${totalDeductions.toStringAsFixed(2)}  ',
+            pw.Text('Deductions: Rs.${empDed.toStringAsFixed(2)}  ',
                 style: pw.TextStyle(color: PdfColors.red700)),
-            pw.Text('Total Net: Rs.${totalNet.toStringAsFixed(2)}',
-                style: pw.TextStyle(
-                    color: PdfColors.green700,
-                    fontWeight: pw.FontWeight.bold)),
+            pw.Text('Emp Net: Rs.${empNet.toStringAsFixed(2)}  ',
+                style: pw.TextStyle(color: PdfColors.green700, fontWeight: pw.FontWeight.bold)),
+            pw.Text('Sup Net: Rs.${supNet.toStringAsFixed(2)}  ',
+                style: pw.TextStyle(color: PdfColors.blue700, fontWeight: pw.FontWeight.bold)),
+            pw.Text('Total: Rs.${totalNet.toStringAsFixed(2)}',
+                style: pw.TextStyle(color: PdfColors.green900, fontWeight: pw.FontWeight.bold)),
           ]),
-          pw.Text('Paid: $paid employees | Pending: $pending employees'),
           pw.SizedBox(height: 16),
+          pw.Text('Employee Payroll',
+              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
           pw.Table.fromTextArray(
-            headers: [
-              'Code',
-              'Name',
-              'Present',
-              'Half Day',
-              'Absent',
-              'Rate/Day',
-              'Gross',
-              'Advance',
-              'Penalty',
-              'Bonus',
-              'Net',
-              'Status'
-            ],
-            data: _data
-                .map((p) => [
-                      p.employeeCode ?? '',
-                      p.employeeName ?? '',
-                      '${p.presentDays.toStringAsFixed(1)}',
-                      '${p.halfDays.toStringAsFixed(1)}',
-                      '${p.absentDays.toStringAsFixed(1)}',
-                      'Rs.${p.dailyWageRate.toStringAsFixed(0)}',
-                      'Rs.${p.grossWage.toStringAsFixed(2)}',
-                      'Rs.${p.advanceDeduction.toStringAsFixed(2)}',
-                      'Rs.${p.penaltyDeduction.toStringAsFixed(2)}',
-                      'Rs.${p.bonus.toStringAsFixed(2)}',
-                      'Rs.${p.netWage.toStringAsFixed(2)}',
-                      p.status.toUpperCase(),
-                    ])
-                .toList(),
-            headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold, fontSize: 8),
+            headers: ['Code', 'Name', 'Present', 'Half', 'Absent', 'Rate/Day', 'Gross', 'Advance', 'Penalty', 'Bonus', 'Net', 'Status'],
+            data: _employeeData.map((p) => [
+              p.employeeCode ?? '',
+              p.employeeName ?? '',
+              '${p.presentDays.toStringAsFixed(1)}',
+              '${p.halfDays.toStringAsFixed(1)}',
+              '${p.absentDays.toStringAsFixed(1)}',
+              'Rs.${p.dailyWageRate.toStringAsFixed(0)}',
+              'Rs.${p.grossWage.toStringAsFixed(2)}',
+              'Rs.${p.advanceDeduction.toStringAsFixed(2)}',
+              'Rs.${p.penaltyDeduction.toStringAsFixed(2)}',
+              'Rs.${p.bonus.toStringAsFixed(2)}',
+              'Rs.${p.netWage.toStringAsFixed(2)}',
+              p.status.toUpperCase(),
+            ]).toList(),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
             cellStyle: const pw.TextStyle(fontSize: 8),
-            headerDecoration:
-                const pw.BoxDecoration(color: PdfColors.green100),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.green100),
+          ),
+          pw.SizedBox(height: 20),
+          pw.Text('Supervisor Payroll',
+              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          pw.Table.fromTextArray(
+            headers: ['Code', 'Name', 'Salary', 'Bonus', 'Deduction', 'Net', 'Status'],
+            data: _supervisorData.map((s) => [
+              s.supervisorCode ?? '',
+              s.supervisorName ?? '',
+              'Rs.${s.monthlySalary.toStringAsFixed(2)}',
+              'Rs.${s.bonus.toStringAsFixed(2)}',
+              'Rs.${s.deduction.toStringAsFixed(2)}',
+              'Rs.${s.netAmount.toStringAsFixed(2)}',
+              s.status.toUpperCase(),
+            ]).toList(),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.blue50),
           ),
         ],
       ),
@@ -1074,18 +1069,17 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/payroll_report.pdf');
     await file.writeAsBytes(await pdf.save());
-    await Share.shareXFiles([XFile(file.path)],
-        subject: 'Payroll Report');
+    await Share.shareXFiles([XFile(file.path)], subject: 'Payroll Report');
   }
 
   @override
   Widget build(BuildContext context) {
-    final totalNet =
-        _data.fold<double>(0, (s, p) => s + p.netWage);
-    final totalGross =
-        _data.fold<double>(0, (s, p) => s + p.grossWage);
-    final paid =
-        _data.where((p) => p.status == 'paid').length;
+    final empNet  = _employeeData.fold<double>(0, (s, p) => s + p.netWage);
+    final supNet  = _supervisorData.fold<double>(0, (s, p) => s + p.netAmount);
+    final totalNet = empNet + supNet;
+    final empGross = _employeeData.fold<double>(0, (s, p) => s + p.grossWage);
+    final empPaid  = _employeeData.where((p) => p.status == 'paid').length;
+    final supPaid  = _supervisorData.where((s) => s.status == 'paid').length;
 
     return Column(
       children: [
@@ -1136,10 +1130,9 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
           ),
         ),
         if (_isLoading) const LinearProgressIndicator(),
-        if (_hasSearched && !_isLoading && _data.isNotEmpty)
+        if (_hasSearched && !_isLoading && (_employeeData.isNotEmpty || _supervisorData.isNotEmpty))
           Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: const Color(0xFFE8F5E9),
             child: Row(
               children: [
@@ -1148,27 +1141,103 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                          'Net: ${CurrencyUtils.format(totalNet)} | Gross: ${CurrencyUtils.format(totalGross)}',
+                          'Total Net: ${CurrencyUtils.format(totalNet)}',
                           style: const TextStyle(
                               fontWeight: FontWeight.w700,
                               color: AppColors.success700,
                               fontSize: 12,
                               fontFamily: 'Inter')),
                       Text(
-                          '${_data.length} employees | $paid paid | ${_data.length - paid} pending',
+                          'Emp: ${_employeeData.length} (${empPaid} paid) · Sup: ${_supervisorData.length} (${supPaid} paid)',
                           style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.share_rounded,
-                      color: AppColors.success600),
+                  icon: const Icon(Icons.share_rounded, color: AppColors.success600),
                   tooltip: 'Share PDF',
                   onPressed: _sharePdf,
                 ),
               ],
             ),
           ),
+        Expanded(
+          child: !_hasSearched
+              ? const Center(
+                  child: Text('Select month and generate report',
+                      style: TextStyle(color: AppColors.secondary400)))
+              : (_employeeData.isEmpty && _supervisorData.isEmpty)
+                  ? const w.EmptyState(title: 'No payroll records', icon: Icons.payments_outlined)
+                  : ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        if (_employeeData.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text('Employees (${_employeeData.length})',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, fontFamily: 'Inter')),
+                          ),
+                          ..._employeeData.map((p) => Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.secondary200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(children: [
+                                  Expanded(child: Text(p.employeeName ?? '', style: Theme.of(context).textTheme.titleSmall)),
+                                  Text(CurrencyUtils.format(p.netWage),
+                                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: AppColors.success600)),
+                                ]),
+                                const SizedBox(height: 4),
+                                Text('${p.employeeCode} · ${p.effectiveDays.toStringAsFixed(1)} days @ ₹${p.dailyWageRate.toStringAsFixed(0)}/day',
+                                    style: Theme.of(context).textTheme.bodySmall),
+                                Text('Gross: ${CurrencyUtils.format(p.grossWage)} · Advance: ${CurrencyUtils.format(p.advanceDeduction)}',
+                                    style: Theme.of(context).textTheme.bodySmall),
+                              ],
+                            ),
+                          )),
+                          const SizedBox(height: 16),
+                        ],
+                        if (_supervisorData.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text('Supervisors (${_supervisorData.length})',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, fontFamily: 'Inter')),
+                          ),
+                          ..._supervisorData.map((s) => Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.secondary200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(children: [
+                                  Expanded(child: Text(s.supervisorName ?? '', style: Theme.of(context).textTheme.titleSmall)),
+                                  Text(CurrencyUtils.format(s.netAmount),
+                                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: AppColors.primary600)),
+                                ]),
+                                const SizedBox(height: 4),
+                                Text('${s.supervisorCode} · Salary: ${CurrencyUtils.format(s.monthlySalary)}',
+                                    style: Theme.of(context).textTheme.bodySmall),
+                                if (s.bonus > 0 || s.deduction > 0)
+                                  Text('Bonus: ${CurrencyUtils.format(s.bonus)} · Deduction: ${CurrencyUtils.format(s.deduction)}',
+                                      style: Theme.of(context).textTheme.bodySmall),
+                              ],
+                            ),
+                          )),
+                        ],
+                      ],
+                    ),
+        ),
         Expanded(
           child: !_hasSearched
               ? const Center(
