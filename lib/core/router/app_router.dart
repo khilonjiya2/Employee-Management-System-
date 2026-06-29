@@ -21,6 +21,7 @@ import '../../presentation/employees/employee_form_screen.dart';
 import '../../presentation/employees/employee_detail_screen.dart';
 
 import '../../presentation/supervisors/supervisors_list_screen.dart';
+import '../../presentation/supervisors/supervisor_employees_screen.dart';
 
 import '../../presentation/attendance/attendance_list_screen.dart';
 import '../../presentation/attendance/attendance_entry_screen.dart';
@@ -180,6 +181,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 name: 'supervisor-edit',
                 path: ':id/edit',
                 builder: (_, state) => SupervisorFormScreen(
+                    supervisorId: state.pathParameters['id']!),
+              ),
+              GoRoute(
+                name: 'supervisor-employees',
+                path: ':id/employees',
+                builder: (_, state) => SupervisorEmployeesScreen(
                     supervisorId: state.pathParameters['id']!),
               ),
             ],
