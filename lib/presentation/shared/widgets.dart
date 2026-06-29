@@ -928,7 +928,7 @@ class _CashfreePaymentSheetState extends State<_CashfreePaymentSheet> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Pay \u{20B9}${widget.amount.toStringAsFixed(2)}',
+                      'Pay ${CurrencyUtils.format(widget.amount)}',
                       style: const TextStyle(
                           fontSize: 20, fontWeight: FontWeight.w800,
                           fontFamily: 'Inter', color: AppColors.primary600),
@@ -1643,7 +1643,7 @@ class CashfreePayButton extends ConsumerWidget {
     if (paymentEnabled) {
       return ElevatedButton.icon(
         icon: const Icon(Icons.send_rounded, size: 16),
-        label: Text('Pay \u{20B9}${CurrencyUtils.format(amount)}'),
+        label: Text('Pay ${CurrencyUtils.format(amount)}'),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.success500,
           foregroundColor: Colors.white,
