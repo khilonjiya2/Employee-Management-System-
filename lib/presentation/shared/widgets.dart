@@ -1122,6 +1122,9 @@ class _CashfreePaymentSheetState extends State<_CashfreePaymentSheet> {
 
     final client = widget.ref.read(supabaseProvider);
 
+    // Poll every 5 seconds as a fallback in case Realtime misses the update
+    _pollForStatus(client, table);
+
     // 3-minute timeout: if Cashfree webhook hasn't arrived, stop waiting
     _timeoutTimer = Timer(const Duration(minutes: 3), () {
       if (!mounted) return;
@@ -1142,35 +1145,63 @@ class _CashfreePaymentSheetState extends State<_CashfreePaymentSheet> {
         .listen((rows) {
           if (!mounted) return;
           if (rows.isEmpty) return;
-
-          final row = rows.first;
-          final status = row['payment_status'] as String?;
-          final utr = row['utr_reference'] as String?;
-
-          if (status == 'paid') {
-            _realtimeSub?.cancel();
-            _timeoutTimer?.cancel();
-            if (widget.referenceType == 'payroll') {
-              widget.ref.invalidate(payrollListProvider);
-            } else if (widget.referenceType == 'supervisor_payroll') {
-              widget.ref.invalidate(supervisorPayrollListProvider);
-            } else {
-              widget.ref.invalidate(expensesProvider);
-            }
-            setState(() {
-              _state = _PayState.success;
-              _utr = utr;
-            });
-          } else if (status == 'failed') {
-            _realtimeSub?.cancel();
-            _timeoutTimer?.cancel();
-            setState(() {
-              _state = _PayState.failed;
-              _errorMessage =
-                  'Cashfree could not complete the payment. The amount will be reversed if debited. Please check the bank details and retry.';
-            });
-          }
+          _handleStatusRow(rows.first);
         });
+  }
+
+  // Poll the DB directly every 5s — covers the case where Realtime is not
+  // enabled or the webhook fires before the stream subscription is ready.
+  void _pollForStatus(dynamic client, String table) {
+    Timer.periodic(const Duration(seconds: 5), (timer) async {
+      if (!mounted || _state != _PayState.waiting) {
+        timer.cancel();
+        return;
+      }
+      try {
+        final row = await client
+            .from(table)
+            .select('payment_status, utr_reference')
+            .eq('id', widget.referenceId)
+            .single();
+        if (!mounted) { timer.cancel(); return; }
+        final status = row['payment_status'] as String?;
+        if (status == 'paid' || status == 'failed') {
+          timer.cancel();
+          _realtimeSub?.cancel();
+          _timeoutTimer?.cancel();
+          _handleStatusRow(row as Map<String, dynamic>);
+        }
+      } catch (_) { /* ignore poll errors */ }
+    });
+  }
+
+  void _handleStatusRow(Map<String, dynamic> row) {
+    final status = row['payment_status'] as String?;
+    final utr = row['utr_reference'] as String?;
+
+    if (status == 'paid') {
+      _realtimeSub?.cancel();
+      _timeoutTimer?.cancel();
+      if (widget.referenceType == 'payroll') {
+        widget.ref.invalidate(payrollListProvider);
+      } else if (widget.referenceType == 'supervisor_payroll') {
+        widget.ref.invalidate(supervisorPayrollListProvider);
+      } else {
+        widget.ref.invalidate(expensesProvider);
+      }
+      setState(() {
+        _state = _PayState.success;
+        _utr = utr;
+      });
+    } else if (status == 'failed') {
+      _realtimeSub?.cancel();
+      _timeoutTimer?.cancel();
+      setState(() {
+        _state = _PayState.failed;
+        _errorMessage =
+            'Cashfree could not complete the payment. The amount will be reversed if debited. Please check the bank details and retry.';
+      });
+    }
   }
 }
 
