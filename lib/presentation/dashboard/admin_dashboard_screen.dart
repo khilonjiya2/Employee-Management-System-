@@ -717,7 +717,12 @@ class _SupervisorDashboardScreenState
                           icon: Icons.people_rounded,
                           iconColor: AppColors.primary500,
                           iconBg: AppColors.primary50,
-                          onTap: null,
+                          onTap: () {
+                            final supervisorId = stats['supervisor_id'] as String?;
+                            if (supervisorId != null) {
+                              context.push('/supervisors/$supervisorId/employees');
+                            }
+                          },
                         ),
                       ),
                       const SizedBox(width: 12),
