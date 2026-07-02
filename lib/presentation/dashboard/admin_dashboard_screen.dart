@@ -748,7 +748,8 @@ class _SupervisorDashboardScreenState
                   const SizedBox(height: 12),
 
                   // Wallet balance card
-                  _SupervisorWalletCard(supervisorId: stats['supervisor_id'] as String?),
+                  SupervisorDashboardWalletCard(
+                      supervisorId: stats['supervisor_id'] as String?),
 
                   const SizedBox(height: 12),
 
@@ -1299,54 +1300,6 @@ class _PayslipDetailRow extends StatelessWidget {
         Expanded(child: Text(label, style: TextStyle(fontSize: 13, color: AppColors.secondary600, fontWeight: bold ? FontWeight.w700 : FontWeight.w400))),
         Text(value, style: TextStyle(fontSize: 13, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, fontFamily: 'Inter', color: color ?? AppColors.secondary800)),
       ]),
-    );
-  }
-}
-class _SupervisorWalletCard extends ConsumerWidget {
-  final String? supervisorId;
-  const _SupervisorWalletCard({this.supervisorId});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (supervisorId == null) return const SizedBox.shrink();
-    final walletAsync = ref.watch(supervisorWalletProvider(supervisorId!));
-
-    return walletAsync.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (wallet) {
-        final balance = wallet?.balance ?? 0;
-        return GestureDetector(
-          onTap: () => context.push('/supervisors/$supervisorId/wallet'),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1E3A5F), Color(0xFF2E6DA4)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(children: [
-              const Icon(Icons.account_balance_wallet_rounded,
-                  color: Colors.white70, size: 28),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Advance Balance',
-                      style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  Text(CurrencyUtils.format(balance),
-                      style: const TextStyle(color: Colors.white,
-                          fontWeight: FontWeight.w800, fontSize: 20,
-                          fontFamily: 'Inter')),
-                ]),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: Colors.white54),
-            ]),
-          ),
-        );
-      },
     );
   }
 }
