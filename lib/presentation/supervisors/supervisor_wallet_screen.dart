@@ -8,7 +8,12 @@ import '../../core/utils/app_utils.dart' as AppUtils;
 import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
 
-// â”€â”€ Advance amount page (select supervisor + enter amount) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Provider that loads all active supervisors for advance payment selection
+final _advanceSupervisorsProvider = FutureProvider.autoDispose<List<SupervisorModel>>((ref) async {
+  return ref.read(supervisorRepositoryProvider).getAll(isActive: true);
+});
+
+// ── Advance Payment Screen ─────────────────────────────────────────────────
 
 class AdvancePaymentScreen extends ConsumerStatefulWidget {
   /// If provided, pre-selects a supervisor (from supervisor detail screen)
@@ -22,19 +27,25 @@ class AdvancePaymentScreen extends ConsumerStatefulWidget {
 class _AdvancePaymentScreenState extends ConsumerState<AdvancePaymentScreen> {
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
+  final _searchController = TextEditingController();
   String? _selectedSupervisorId;
+  String? _selectedSupervisorName;
   bool _loading = false;
+  String _search = '';
 
   @override
   void initState() {
     super.initState();
-    _selectedSupervisorId = widget.supervisorId;
+    if (widget.supervisorId != null) {
+      _selectedSupervisorId = widget.supervisorId;
+    }
   }
 
   @override
   void dispose() {
     _amountController.dispose();
     _noteController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -56,7 +67,9 @@ class _AdvancePaymentScreenState extends ConsumerState<AdvancePaymentScreen> {
       await ref.read(walletRepositoryProvider).giveAdvance(
         supervisorId: _selectedSupervisorId!,
         amount: amount,
-        note: _noteController.text.trim().isEmpty ? 'Advance Payment' : _noteController.text.trim(),
+        note: _noteController.text.trim().isEmpty
+            ? 'Advance Payment'
+            : _noteController.text.trim(),
         createdBy: profile!.id,
       );
       ref.invalidate(supervisorWalletProvider(_selectedSupervisorId!));
@@ -64,7 +77,7 @@ class _AdvancePaymentScreenState extends ConsumerState<AdvancePaymentScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Advance of ${AppUtils.CurrencyUtils.format(amount)} given successfully'),
+            content: Text('Advance of ${AppUtils.CurrencyUtils.format(amount)} given to ${_selectedSupervisorName ?? "supervisor"}'),
             backgroundColor: AppColors.success500,
           ),
         );
@@ -82,68 +95,184 @@ class _AdvancePaymentScreenState extends ConsumerState<AdvancePaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final supervisorsAsync = ref.watch(supervisorWalletsProvider);
+    final supervisorsAsync = ref.watch(_advanceSupervisorsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Advance Payment')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Supervisor selector (or fixed if pre-selected)
-          supervisorsAsync.when(
-            loading: () => const LinearProgressIndicator(),
-            error: (e, _) => Text('Error: $e'),
-            data: (wallets) {
-              if (widget.supervisorId != null) {
-                final w = wallets.firstWhere(
-                  (w) => w.supervisorId == widget.supervisorId,
-                  orElse: () => wallets.first,
-                );
-                return _WalletInfoCard(wallet: w);
-              }
-              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Select Supervisor',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                const SizedBox(height: 8),
-                ...wallets.map((w) => RadioListTile<String>(
-                  value: w.supervisorId,
-                  groupValue: _selectedSupervisorId,
-                  title: Text(w.supervisorName ?? ''),
-                  subtitle: Text('${w.supervisorCode} Â· Balance: ${AppUtils.CurrencyUtils.format(w.balance)}'),
-                  onChanged: (v) => setState(() => _selectedSupervisorId = v),
-                  contentPadding: EdgeInsets.zero,
-                )),
-              ]);
-            },
+      body: supervisorsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
+        data: (supervisors) {
+          final filtered = _search.isEmpty
+              ? supervisors
+              : supervisors.where((s) =>
+                  s.name.toLowerCase().contains(_search.toLowerCase()) ||
+                  s.supervisorCode.toLowerCase().contains(_search.toLowerCase())).toList();
+
+          return Column(
+            children: [
+              // Search bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search supervisor...',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _search.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _search = '');
+                            })
+                        : null,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  onChanged: (v) => setState(() => _search = v),
+                ),
+              ),
+
+              // Supervisor list
+              Expanded(
+                child: filtered.isEmpty
+                    ? const Center(child: Text('No supervisors found'))
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) {
+                          final sup = filtered[i];
+                          final isSelected = _selectedSupervisorId == sup.id;
+                          return _SupervisorSelectTile(
+                            supervisor: sup,
+                            isSelected: isSelected,
+                            onTap: () => setState(() {
+                              _selectedSupervisorId = sup.id;
+                              _selectedSupervisorName = sup.name;
+                            }),
+                          );
+                        },
+                      ),
+              ),
+
+              // Amount + submit panel
+              if (_selectedSupervisorId != null) ...[
+                const Divider(height: 1),
+                Container(
+                  padding: EdgeInsets.fromLTRB(
+                      16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+                  color: AppColors.secondary50,
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text(
+                      'Giving advance to: ${_selectedSupervisorName ?? ""}',
+                      style: const TextStyle(fontWeight: FontWeight.w600,
+                          color: AppColors.primary600),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _amountController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: 'Amount',
+                            prefixIcon: const Icon(Icons.currency_rupee_rounded),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _noteController,
+                          decoration: InputDecoration(
+                            labelText: 'Note (optional)',
+                            prefixIcon: const Icon(Icons.note_outlined),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                          ),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _loading ? null : _submit,
+                        child: _loading
+                            ? const SizedBox(height: 20, width: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('Give Advance'),
+                      ),
+                    ),
+                  ]),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SupervisorSelectTile extends ConsumerWidget {
+  final SupervisorModel supervisor;
+  final bool isSelected;
+  final VoidCallback onTap;
+  const _SupervisorSelectTile({
+    required this.supervisor,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final walletAsync = ref.watch(supervisorWalletProvider(supervisor.id));
+    final balance = walletAsync.valueOrNull?.balance ?? 0.0;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary50 : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppColors.primary500 : AppColors.secondary200,
+            width: isSelected ? 2 : 1,
           ),
-          const SizedBox(height: 20),
-          TextFormField(
-            controller: _amountController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Amount *',
-              prefixIcon: Icon(Icons.currency_rupee_rounded),
-            ),
+        ),
+        child: Row(children: [
+          CircleAvatar(
+            backgroundColor: isSelected ? AppColors.primary100 : AppColors.secondary100,
+            child: Text(supervisor.name[0].toUpperCase(),
+                style: TextStyle(
+                    color: isSelected ? AppColors.primary600 : AppColors.secondary600,
+                    fontWeight: FontWeight.w700)),
           ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _noteController,
-            decoration: const InputDecoration(
-              labelText: 'Note (optional)',
-              prefixIcon: Icon(Icons.note_outlined),
-            ),
-          ),
-          const SizedBox(height: 32),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _loading ? null : _submit,
-              child: _loading
-                  ? const SizedBox(height: 20, width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Give Advance'),
-            ),
-          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(supervisor.name,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            Text(supervisor.supervisorCode,
+                style: const TextStyle(color: AppColors.secondary400, fontSize: 12)),
+          ])),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            const Text('Balance', style: TextStyle(fontSize: 11, color: AppColors.secondary400)),
+            Text(AppUtils.CurrencyUtils.format(balance),
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: balance > 0 ? AppColors.success600 : AppColors.secondary400,
+                    fontSize: 14, fontFamily: 'Inter')),
+          ]),
+          if (isSelected) ...[
+            const SizedBox(width: 8),
+            const Icon(Icons.check_circle_rounded, color: AppColors.primary500),
+          ],
         ]),
       ),
     );
@@ -183,7 +312,7 @@ class _WalletInfoCard extends StatelessWidget {
   }
 }
 
-// â”€â”€ Supervisor Wallet Detail Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Supervisor Wallet Detail Screen ────────────────────────────────────────
 
 class SupervisorWalletScreen extends ConsumerWidget {
   final String supervisorId;
@@ -202,7 +331,7 @@ class SupervisorWalletScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(supervisorName != null ? '$supervisorName Â· Wallet' : 'Wallet'),
+        title: Text(supervisorName != null ? '$supervisorName - Wallet' : 'Wallet'),
         actions: [
           if (isAdmin)
             IconButton(
@@ -387,7 +516,7 @@ class _LedgerTile extends StatelessWidget {
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(note, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
           Text(
-            '${isAdvance ? 'Advance' : 'Expense'} Â· ${AppUtils.DateUtils.formatDate(date)} Â· ${status.toUpperCase()}',
+            '${isAdvance ? 'Advance' : 'Expense'} - ${AppUtils.DateUtils.formatDate(date)} - ${status.toUpperCase()}',
             style: const TextStyle(fontSize: 11, color: AppColors.secondary400),
           ),
         ])),
@@ -405,7 +534,7 @@ class _LedgerTile extends StatelessWidget {
   }
 }
 
-// â”€â”€ All Supervisors Wallet List (Admin view) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── All Supervisors Wallet List (Admin view) ────────────────────────────────
 
 class SupervisorWalletsListScreen extends ConsumerWidget {
   const SupervisorWalletsListScreen({super.key});
