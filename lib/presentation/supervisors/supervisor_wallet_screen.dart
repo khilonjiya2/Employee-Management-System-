@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/utils/app_utils.dart';
 import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
@@ -360,7 +361,7 @@ class _LedgerTile extends StatelessWidget {
       icon = Icons.undo_rounded;
       sign = '+';
     } else {
-      statusColor = AppColors.amber500;
+      statusColor = const Color(0xFFF59E0B);
       icon = Icons.hourglass_empty_rounded;
       sign = '~';
     }
@@ -386,7 +387,7 @@ class _LedgerTile extends StatelessWidget {
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(note, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
           Text(
-            '${isAdvance ? 'Advance' : 'Expense'} · ${DateTimeUtils.formatDate(date)} · ${status.toUpperCase()}',
+            '${isAdvance ? 'Advance' : 'Expense'} · ${DateUtils.formatDate(date)} · ${status.toUpperCase()}',
             style: const TextStyle(fontSize: 11, color: AppColors.secondary400),
           ),
         ])),
