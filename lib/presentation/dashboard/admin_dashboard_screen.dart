@@ -474,7 +474,7 @@ class _QuickActions extends StatelessWidget {
       _ActionItem(Icons.receipt_long_rounded, 'Expenses', '/expenses'),
       _ActionItem(Icons.payments_rounded, 'Payroll', '/payroll'),
       _ActionItem(Icons.bar_chart_rounded, 'Reports', '/reports'),
-      _ActionItem(Icons.account_balance_wallet_rounded, 'Advance Payment', '/advance-payment'),
+      _ActionItem(Icons.account_balance_wallet_rounded, 'Advance', '/advance-payment'),
     ];
 
     return GridView.count(
