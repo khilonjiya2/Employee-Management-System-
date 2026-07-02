@@ -335,9 +335,11 @@ class _SupervisorWalletScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.supervisorName != null
-            ? '${widget.supervisorName} - Wallet'
-            : 'Wallet'),
+        title: Text(
+          widget.supervisorName ?? 'Wallet',
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
         actions: [
           if (isAdmin)
             Padding(
