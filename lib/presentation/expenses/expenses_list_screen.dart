@@ -22,9 +22,29 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<ExpenseModel>>> {
   final ExpenseRepository _repo;
   final dynamic _client;
   final ProfileModel? _profile;
+  dynamic _realtimeSub;
 
   ExpensesNotifier(this._repo, this._client, this._profile) : super(const AsyncLoading()) {
     load();
+    _subscribeRealtime();
+  }
+
+  void _subscribeRealtime() {
+    _realtimeSub = _client
+        .channel('expenses_realtime')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'expenses',
+          callback: (_) => load(),
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    _client.removeChannel(_realtimeSub);
+    super.dispose();
   }
 
   Future<void> load({String? status, String? category}) async {
