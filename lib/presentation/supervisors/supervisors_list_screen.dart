@@ -14,18 +14,40 @@ import '../shared/widgets.dart' as w;
 
 final supervisorsProvider = StateNotifierProvider.autoDispose<
     SupervisorsNotifier, AsyncValue<List<SupervisorModel>>>((ref) {
-  return SupervisorsNotifier(ref.watch(supervisorRepositoryProvider));
+  return SupervisorsNotifier(
+      ref.watch(supervisorRepositoryProvider), ref.watch(supabaseProvider));
 });
 
 class SupervisorsNotifier
     extends StateNotifier<AsyncValue<List<SupervisorModel>>> {
   final SupervisorRepository _repo;
-  SupervisorsNotifier(this._repo) : super(const AsyncLoading()) {
+  final dynamic _client;
+  dynamic _realtimeSub;
+
+  SupervisorsNotifier(this._repo, this._client) : super(const AsyncLoading()) {
     load();
+    _subscribeRealtime();
+  }
+
+  void _subscribeRealtime() {
+    _realtimeSub = _client
+        .channel('supervisors_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'supervisors',
+          callback: (_) => load(),
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    _client.removeChannel(_realtimeSub);
+    super.dispose();
   }
 
   Future<void> load({bool? isActive, String? search}) async {
-    state = const AsyncLoading();
     try {
       final data = await _repo.getAll(search: search, isActive: isActive);
       state = AsyncData(data);
@@ -817,6 +839,15 @@ class SupervisorDetailScreen extends ConsumerWidget {
                   onPressed: () => _showSalaryHistory(
                       context, ref, sup, paymentEnabled),
                 ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.account_balance_wallet_rounded, size: 18),
+                  label: const Text('Advance Wallet'),
+                  onPressed: () => context.push(
+                    '/supervisors/${sup.id}/wallet',
+                    extra: sup.name,
+                  ),
+                ),
               ],
             ),
           );
@@ -1125,47 +1156,10 @@ class _SalaryCard extends ConsumerWidget {
           if (!record.isPaid)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Row(
-                children: [
-                  if (paymentEnabled && supervisor.hasUpi)
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(
-                            Icons.account_balance_wallet_rounded,
-                            size: 16),
-                        label: const Text('Pay via UPI'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.success600,
-                          side: const BorderSide(
-                              color: AppColors.success500),
-                        ),
-                        onPressed: () async {
-                          await w.UpiPaymentHelper.paySupervisorSalary(
-                              context, ref, record, supervisor);
-                          onRefresh();
-                        },
-                      ),
-                    ),
-                  if (paymentEnabled && supervisor.hasUpi)
-                    const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.check_rounded, size: 16),
-                      label: const Text('Mark Paid'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary600,
-                        side: const BorderSide(
-                            color: AppColors.primary500),
-                      ),
-                      onPressed: () async {
-                        await ref
-                            .read(supervisorPayrollRepositoryProvider)
-                            .markAsPaid(record.id);
-                        onRefresh();
-                      },
-                    ),
-                  ),
-                ],
+              child: Text(
+                'Payment pending — process via Payroll screen',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.secondary400),
               ),
             ),
         ],
