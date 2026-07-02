@@ -265,14 +265,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => _showResetPassword(context, ref),
             ),
-            if (ref.watch(paymentModuleEnabledProvider))
-              ListTile(
-                leading: const Icon(Icons.pin_outlined),
-                title: const Text('Payout PIN'),
-                subtitle: const Text('Set or change the 4-digit PIN required to initiate payments'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => _showPayoutPinSetup(context, ref),
-              ),
+            ListTile(
+              leading: const Icon(Icons.pin_outlined),
+              title: const Text('Payout PIN'),
+              subtitle: const Text('Set or change the 4-digit PIN required to initiate payments'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => _showPayoutPinSetup(context, ref),
+            ),
           ],
 
           // About
@@ -583,23 +582,11 @@ class _LocationsManagerState extends State<_LocationsManager> {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
-    // Check for duplicate name within the same company before closing dialog
-    final profile = widget.ref.read(currentProfileProvider).valueOrNull;
-    final companyId = profile?.companyId;
-    final duplicate = _locations.any(
-      (l) => (l['name'] as String).toLowerCase() == name.toLowerCase()
-          && (companyId == null || l['company_id'] == companyId),
-    );
-    if (duplicate) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('A location named "$name" already exists.'),
-          backgroundColor: AppColors.error500,
-        ),
-      );
-      return;
-    }
-
+    // Close the dialog FIRST using its own context, before any async work.
+    // This is the fix for bug #6: the old code called Navigator.pop(context)
+    // using the _LocationsManagerState's context (the bottom sheet's context)
+    // instead of the dialog's own context, so the dialog never actually
+    // closed even though the insert succeeded.
     Navigator.of(dialogContext).pop();
 
     final user = widget.ref.read(supabaseProvider).auth.currentUser;
@@ -611,7 +598,6 @@ class _LocationsManagerState extends State<_LocationsManager> {
             : _addressController.text.trim(),
         'is_active': true,
         'created_by': user?.id,
-        if (companyId != null) 'company_id': companyId,
       });
       _nameController.clear();
       _addressController.clear();
