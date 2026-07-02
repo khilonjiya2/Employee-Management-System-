@@ -179,12 +179,13 @@ class _AttendanceReportState extends ConsumerState<_AttendanceReport> {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
         build: (ctx) => [
           pw.Header(
             level: 0,
             child: pw.Text('Attendance Report',
                 style: pw.TextStyle(
-                    fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                    fontSize: 16, fontWeight: pw.FontWeight.bold)),
           ),
           pw.Text(
               'Period: ${DateFormat('dd/MM/yyyy').format(_fromDate)} - ${DateFormat('dd/MM/yyyy').format(_toDate)}'),
@@ -203,17 +204,18 @@ class _AttendanceReportState extends ConsumerState<_AttendanceReport> {
           pw.SizedBox(height: 16),
           pw.Text('Employee-wise Summary',
               style: pw.TextStyle(
-                  fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                  fontSize: 12, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
           pw.Table.fromTextArray(
-            headers: [
-              'Code',
-              'Employee Name',
-              'Supervisor',
-              'Days Present',
-              'Days Absent',
-              'Total Days'
-            ],
+            columnWidths: {
+              0: const pw.FixedColumnWidth(55),
+              1: const pw.FlexColumnWidth(2),
+              2: const pw.FlexColumnWidth(2),
+              3: const pw.FixedColumnWidth(50),
+              4: const pw.FixedColumnWidth(50),
+              5: const pw.FixedColumnWidth(45),
+            },
+            headers: ['Code', 'Employee Name', 'Supervisor', 'Present', 'Absent', 'Total'],
             data: summary.values.map((e) {
               final total = (e['present'] as int) + (e['absent'] as int);
               return [
@@ -226,26 +228,27 @@ class _AttendanceReportState extends ConsumerState<_AttendanceReport> {
               ];
             }).toList(),
             headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold, fontSize: 10),
-            cellStyle: const pw.TextStyle(fontSize: 9),
+                fontWeight: pw.FontWeight.bold, fontSize: 7),
+            cellStyle: const pw.TextStyle(fontSize: 7),
             headerDecoration:
                 const pw.BoxDecoration(color: PdfColors.blue100),
           ),
           pw.SizedBox(height: 20),
           pw.Text('Daily Attendance Log',
               style: pw.TextStyle(
-                  fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                  fontSize: 12, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
           pw.Table.fromTextArray(
-            headers: [
-              'Date',
-              'Supervisor',
-              'Location',
-              'Present',
-              'Absent',
-              'Total',
-              'Status'
-            ],
+            columnWidths: {
+              0: const pw.FixedColumnWidth(60),
+              1: const pw.FlexColumnWidth(2),
+              2: const pw.FlexColumnWidth(2),
+              3: const pw.FixedColumnWidth(38),
+              4: const pw.FixedColumnWidth(38),
+              5: const pw.FixedColumnWidth(38),
+              6: const pw.FixedColumnWidth(55),
+            },
+            headers: ['Date', 'Supervisor', 'Location', 'Pres', 'Abs', 'Tot', 'Status'],
             data: _data.map((a) {
               final details = a.details ?? [];
               final p = details.where((d) => d.status == 'present').length;
@@ -261,8 +264,8 @@ class _AttendanceReportState extends ConsumerState<_AttendanceReport> {
               ];
             }).toList(),
             headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold, fontSize: 10),
-            cellStyle: const pw.TextStyle(fontSize: 9),
+                fontWeight: pw.FontWeight.bold, fontSize: 7),
+            cellStyle: const pw.TextStyle(fontSize: 7),
             headerDecoration:
                 const pw.BoxDecoration(color: PdfColors.blue50),
           ),
@@ -635,12 +638,13 @@ class _ExpenseReportState extends ConsumerState<_ExpenseReport> {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
         build: (ctx) => [
           pw.Header(
             level: 0,
             child: pw.Text('Expense Report',
                 style: pw.TextStyle(
-                    fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                    fontSize: 16, fontWeight: pw.FontWeight.bold)),
           ),
           pw.Text(
               'Period: ${DateFormat('dd/MM/yyyy').format(_fromDate)} - ${DateFormat('dd/MM/yyyy').format(_toDate)}'),
@@ -657,7 +661,7 @@ class _ExpenseReportState extends ConsumerState<_ExpenseReport> {
           pw.SizedBox(height: 16),
           pw.Text('Supervisor-wise Summary',
               style: pw.TextStyle(
-                  fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                  fontSize: 12, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
           pw.Table.fromTextArray(
             headers: [
@@ -675,15 +679,15 @@ class _ExpenseReportState extends ConsumerState<_ExpenseReport> {
                   'Rs.${(s['pending'] as double? ?? 0).toStringAsFixed(2)}',
                 ]).toList(),
             headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold, fontSize: 10),
-            cellStyle: const pw.TextStyle(fontSize: 9),
+                fontWeight: pw.FontWeight.bold, fontSize: 7),
+            cellStyle: const pw.TextStyle(fontSize: 7),
             headerDecoration:
                 const pw.BoxDecoration(color: PdfColors.amber100),
           ),
           pw.SizedBox(height: 20),
           pw.Text('Expense Details',
               style: pw.TextStyle(
-                  fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                  fontSize: 12, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
           pw.Table.fromTextArray(
             headers: [
@@ -705,8 +709,8 @@ class _ExpenseReportState extends ConsumerState<_ExpenseReport> {
                     ])
                 .toList(),
             headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold, fontSize: 10),
-            cellStyle: const pw.TextStyle(fontSize: 9),
+                fontWeight: pw.FontWeight.bold, fontSize: 7),
+            cellStyle: const pw.TextStyle(fontSize: 7),
             headerDecoration:
                 const pw.BoxDecoration(color: PdfColors.amber50),
           ),
@@ -999,6 +1003,7 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
         build: (ctx) => [
           pw.Header(
             level: 0,
@@ -1024,7 +1029,21 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
               style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.Table.fromTextArray(
-            headers: ['Code', 'Name', 'Present', 'Half', 'Absent', 'Rate/Day', 'Gross', 'Advance', 'Penalty', 'Bonus', 'Net', 'Status'],
+            columnWidths: {
+              0: const pw.FixedColumnWidth(52),
+              1: const pw.FlexColumnWidth(2),
+              2: const pw.FixedColumnWidth(38),
+              3: const pw.FixedColumnWidth(32),
+              4: const pw.FixedColumnWidth(38),
+              5: const pw.FixedColumnWidth(48),
+              6: const pw.FixedColumnWidth(52),
+              7: const pw.FixedColumnWidth(48),
+              8: const pw.FixedColumnWidth(45),
+              9: const pw.FixedColumnWidth(42),
+              10: const pw.FixedColumnWidth(52),
+              11: const pw.FixedColumnWidth(48),
+            },
+            headers: ['Code', 'Name', 'Pres', 'Half', 'Abs', 'Rate', 'Gross', 'Adv', 'Pen', 'Bon', 'Net', 'Status'],
             data: _employeeData.map((p) => [
               p.employeeCode ?? '',
               p.employeeName ?? '',
@@ -1040,7 +1059,7 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
               p.status.toUpperCase(),
             ]).toList(),
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
-            cellStyle: const pw.TextStyle(fontSize: 8),
+            cellStyle: const pw.TextStyle(fontSize: 7),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.green100),
           ),
           pw.SizedBox(height: 20),
@@ -1048,6 +1067,15 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
               style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.Table.fromTextArray(
+            columnWidths: {
+              0: const pw.FixedColumnWidth(60),
+              1: const pw.FlexColumnWidth(2),
+              2: const pw.FixedColumnWidth(65),
+              3: const pw.FixedColumnWidth(55),
+              4: const pw.FixedColumnWidth(65),
+              5: const pw.FixedColumnWidth(65),
+              6: const pw.FixedColumnWidth(55),
+            },
             headers: ['Code', 'Name', 'Salary', 'Bonus', 'Deduction', 'Net', 'Status'],
             data: _supervisorData.map((s) => [
               s.supervisorCode ?? '',
@@ -1059,7 +1087,7 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
               s.status.toUpperCase(),
             ]).toList(),
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
-            cellStyle: const pw.TextStyle(fontSize: 8),
+            cellStyle: const pw.TextStyle(fontSize: 7),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.blue50),
           ),
         ],
