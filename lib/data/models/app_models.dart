@@ -933,3 +933,95 @@ class SupervisorPayrollModel extends Equatable {
   List<Object?> get props =>
       [id, supervisorId, payrollMonth, payrollYear, status, paymentStatus];
 }
+class SupervisorWalletModel extends Equatable {
+  final String id;
+  final String supervisorId;
+  final String? companyId;
+  final double balance;
+  final double totalAdvanced;
+  final double totalDeducted;
+  final DateTime updatedAt;
+  final String? supervisorName;
+  final String? supervisorCode;
+
+  const SupervisorWalletModel({
+    required this.id,
+    required this.supervisorId,
+    this.companyId,
+    required this.balance,
+    required this.totalAdvanced,
+    required this.totalDeducted,
+    required this.updatedAt,
+    this.supervisorName,
+    this.supervisorCode,
+  });
+
+  factory SupervisorWalletModel.fromJson(Map<String, dynamic> json) =>
+      SupervisorWalletModel(
+        id: json['id'] as String,
+        supervisorId: json['supervisor_id'] as String,
+        companyId: json['company_id'] as String?,
+        balance: (json['balance'] as num?)?.toDouble() ?? 0,
+        totalAdvanced: (json['total_advanced'] as num?)?.toDouble() ?? 0,
+        totalDeducted: (json['total_deducted'] as num?)?.toDouble() ?? 0,
+        updatedAt: DateTime.parse(json['updated_at'] as String),
+        supervisorName: json['supervisors'] != null
+            ? (json['supervisors'] as Map)['name'] as String?
+            : null,
+        supervisorCode: json['supervisors'] != null
+            ? (json['supervisors'] as Map)['supervisor_code'] as String?
+            : null,
+      );
+
+  @override
+  List<Object?> get props => [id, supervisorId, balance];
+}
+
+class AdvancePaymentModel extends Equatable {
+  final String id;
+  final String supervisorId;
+  final String? companyId;
+  final double amount;
+  final String? note;
+  final String? createdBy;
+  final DateTime createdAt;
+  final String? supervisorName;
+  final String? supervisorCode;
+  final String? createdByName;
+
+  const AdvancePaymentModel({
+    required this.id,
+    required this.supervisorId,
+    this.companyId,
+    required this.amount,
+    this.note,
+    this.createdBy,
+    required this.createdAt,
+    this.supervisorName,
+    this.supervisorCode,
+    this.createdByName,
+  });
+
+  factory AdvancePaymentModel.fromJson(Map<String, dynamic> json) =>
+      AdvancePaymentModel(
+        id: json['id'] as String,
+        supervisorId: json['supervisor_id'] as String,
+        companyId: json['company_id'] as String?,
+        amount: (json['amount'] as num?)?.toDouble() ?? 0,
+        note: json['note'] as String?,
+        createdBy: json['created_by'] as String?,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        supervisorName: json['supervisors'] != null
+            ? (json['supervisors'] as Map)['name'] as String?
+            : null,
+        supervisorCode: json['supervisors'] != null
+            ? (json['supervisors'] as Map)['supervisor_code'] as String?
+            : null,
+        createdByName: json['profiles'] != null
+            ? (json['profiles'] as Map)['full_name'] as String?
+            : null,
+      );
+
+  @override
+  List<Object?> get props => [id, supervisorId, amount, createdAt];
+}
