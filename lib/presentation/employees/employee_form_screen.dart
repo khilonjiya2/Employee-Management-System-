@@ -18,9 +18,22 @@ final _employeeDetailProvider = FutureProvider.autoDispose.family<EmployeeModel?
 
 final _supervisorsProvider =
     FutureProvider.autoDispose<List<SupervisorModel>>((ref) async {
-  return ref
-      .read(supervisorRepositoryProvider)
-      .getAll(isActive: true);
+  final role = ref.read(currentUserRoleProvider);
+  final client = ref.read(supabaseProvider);
+  // Supervisors can only assign employees to themselves
+  if (role == 'supervisor') {
+    final profileId = client.auth.currentUser?.id;
+    if (profileId == null) return [];
+    final data = await client
+        .from('supervisors')
+        .select()
+        .eq('profile_id', profileId)
+        .eq('is_active', true);
+    return (data as List)
+        .map((e) => SupervisorModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+  return ref.read(supervisorRepositoryProvider).getAll(isActive: true);
 });
 
 final _departmentsProvider = FutureProvider.autoDispose<List<DepartmentModel>>((ref) async {
@@ -73,6 +86,16 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
     super.initState();
     if (isEditing) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadEmployee());
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final role = ref.read(currentUserRoleProvider);
+        if (role == 'supervisor') {
+          final supervisors = await ref.read(_supervisorsProvider.future);
+          if (supervisors.isNotEmpty && mounted) {
+            setState(() => _supervisorId = supervisors.first.id);
+          }
+        }
+      });
     }
   }
 
