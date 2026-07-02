@@ -188,7 +188,7 @@ class EmployeeRepository {
       'p_joining_date': data['joining_date'],
       'p_department_id': data['department_id'],
       'p_location_id': data['location_id'],
-      'p_status': data['status'] ?? 'active',
+      'p_status': (data['status'] ?? 'active').toString(),
       'p_upi_id': data['upi_id'],
       'p_bank_account_number': data['bank_account_number'],
       'p_bank_ifsc': data['bank_ifsc'],
