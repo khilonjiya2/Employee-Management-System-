@@ -159,8 +159,6 @@ class EmployeeRepository {
   }
 
   Future<EmployeeModel> create(Map<String, dynamic> data) async {
-    // Ensure company_id is set — the form doesn't include it so we pull it
-    // from the current user's profile.
     final profile = _client.auth.currentUser;
     if (!data.containsKey('company_id') || data['company_id'] == null) {
       final profileRow = await _client
@@ -175,29 +173,42 @@ class EmployeeRepository {
       'generate_employee_code',
       params: {'p_company_id': companyId},
     ) as String;
-    data['employee_code'] = code;
-    data['created_by'] = _client.auth.currentUser?.id;
-    final supervisorId = data.remove('supervisor_id');
+
+    // Single atomic RPC — inserts employee + supervisor_employees in one
+    // transaction. Runs as SECURITY DEFINER so RLS is bypassed for both
+    // tables. Either both succeed or neither does.
+    final employeeId = await _client.rpc('create_employee', params: {
+      'p_employee_code': code,
+      'p_name': data['name'],
+      'p_mobile': data['mobile'],
+      'p_address': data['address'],
+      'p_aadhaar_number': data['aadhaar_number'],
+      'p_designation': data['designation'],
+      'p_daily_wage_rate': data['daily_wage_rate'],
+      'p_joining_date': data['joining_date'],
+      'p_department_id': data['department_id'],
+      'p_location_id': data['location_id'],
+      'p_status': data['status'] ?? 'active',
+      'p_upi_id': data['upi_id'],
+      'p_bank_account_number': data['bank_account_number'],
+      'p_bank_ifsc': data['bank_ifsc'],
+      'p_bank_name': data['bank_name'],
+      'p_company_id': companyId,
+      'p_created_by': _client.auth.currentUser?.id,
+      'p_supervisor_id': data['supervisor_id'],
+    }) as String;
 
     final result = await _client
         .from('employees')
-        .insert(data)
         .select('*, departments(name), locations(name)')
+        .eq('id', employeeId)
         .single();
 
-    if (supervisorId != null) {
-      await _client.from('supervisor_employees').insert({
-        'supervisor_id': supervisorId,
-        'employee_id': result['id'],
-      });
-    }
-
-    await _logAudit('employee_created', 'employees', result['id'] as String, null, result);
+    await _logAudit('employee_created', 'employees', employeeId, null, result);
     return EmployeeModel.fromJson(result);
   }
 
   /// Creates login credentials for an existing employee record.
-  /// Calls an edge function similar to create-supervisor.
   Future<EmployeeModel> createLogin(String employeeId, String employeeCode) async {
     final email = '${employeeCode.toUpperCase()}@ems.com';
     final response = await _client.functions.invoke(
@@ -853,6 +864,9 @@ class ExpenseRepository {
       'admin_remarks': remarks,
     }).eq('id', id);
 
+    // Deduct from supervisor wallet
+    await _client.rpc('deduct_wallet_on_expense_approve', params: {'p_expense_id': id});
+
     await _logAudit('expense_approved', 'expenses', id);
 
     if (exp != null) {
@@ -880,6 +894,9 @@ class ExpenseRepository {
       'reviewed_at': DateTime.now().toIso8601String(),
       'admin_remarks': remarks,
     }).eq('id', id);
+
+    // Refund wallet balance on rejection
+    await _client.rpc('refund_wallet_on_expense_reject', params: {'p_expense_id': id});
 
     await _logAudit('expense_rejected', 'expenses', id);
 
@@ -1560,5 +1577,119 @@ class SupervisorPayrollRepository {
       }
     }
     return {'liability': totalLiability, 'paid': paid, 'pending': pending};
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WALLET REPOSITORY
+// ─────────────────────────────────────────────────────────────────────────────
+
+final walletRepositoryProvider = Provider<WalletRepository>((ref) {
+  return WalletRepository(ref.watch(supabaseProvider));
+});
+
+/// Provider for all supervisor wallets (admin view)
+final supervisorWalletsProvider = FutureProvider.autoDispose<List<SupervisorWalletModel>>((ref) async {
+  return ref.read(walletRepositoryProvider).getAllWallets();
+});
+
+/// Provider for a single supervisor's wallet
+final supervisorWalletProvider = FutureProvider.autoDispose.family<SupervisorWalletModel?, String>((ref, supervisorId) async {
+  return ref.read(walletRepositoryProvider).getWallet(supervisorId);
+});
+
+/// Provider for advance payment logs (all or per supervisor)
+final advanceLogsProvider = FutureProvider.autoDispose.family<List<AdvancePaymentModel>, String?>((ref, supervisorId) async {
+  return ref.read(walletRepositoryProvider).getAdvanceLogs(supervisorId: supervisorId);
+});
+
+class WalletRepository {
+  final SupabaseClient _client;
+  WalletRepository(this._client);
+
+  Future<List<SupervisorWalletModel>> getAllWallets() async {
+    final data = await _client
+        .from('supervisor_wallet')
+        .select('*, supervisors(name, supervisor_code)')
+        .order('updated_at', ascending: false);
+    return (data as List)
+        .map((e) => SupervisorWalletModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<SupervisorWalletModel?> getWallet(String supervisorId) async {
+    final data = await _client
+        .from('supervisor_wallet')
+        .select('*, supervisors(name, supervisor_code)')
+        .eq('supervisor_id', supervisorId)
+        .maybeSingle();
+    if (data == null) return null;
+    return SupervisorWalletModel.fromJson(data);
+  }
+
+  Future<void> giveAdvance({
+    required String supervisorId,
+    required double amount,
+    required String note,
+    required String createdBy,
+  }) async {
+    await _client.rpc('give_supervisor_advance', params: {
+      'p_supervisor_id': supervisorId,
+      'p_amount': amount,
+      'p_note': note,
+      'p_created_by': createdBy,
+    });
+  }
+
+  Future<List<AdvancePaymentModel>> getAdvanceLogs({String? supervisorId}) async {
+    var q = _client
+        .from('supervisor_advances')
+        .select('*, supervisors(name, supervisor_code), profiles(full_name)');
+    if (supervisorId != null) q = q.eq('supervisor_id', supervisorId);
+    final data = await q.order('created_at', ascending: false);
+    return (data as List)
+        .map((e) => AdvancePaymentModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Get combined wallet ledger for a supervisor:
+  /// advances (credit) + approved expenses (debit) ordered by date
+  Future<List<Map<String, dynamic>>> getWalletLedger(String supervisorId) async {
+    final advances = await getAdvanceLogs(supervisorId: supervisorId);
+    final expenses = await _client
+        .from('expenses')
+        .select('id, expense_name, amount, status, created_at, expense_date')
+        .eq('supervisor_id', supervisorId)
+        .inFilter('status', ['approved', 'rejected', 'pending'])
+        .order('created_at', ascending: false);
+
+    final List<Map<String, dynamic>> ledger = [];
+
+    for (final a in advances) {
+      ledger.add({
+        'type': 'advance',
+        'id': a.id,
+        'date': a.createdAt,
+        'amount': a.amount,
+        'note': a.note ?? 'Advance Payment',
+        'status': 'credited',
+        'createdBy': a.createdByName,
+      });
+    }
+
+    for (final e in (expenses as List)) {
+      ledger.add({
+        'type': 'expense',
+        'id': e['id'],
+        'date': DateTime.parse(e['created_at'] as String),
+        'amount': e['amount'],
+        'note': e['expense_name'],
+        'status': e['status'],
+        'createdBy': null,
+      });
+    }
+
+    ledger.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+    return ledger;
   }
 }
