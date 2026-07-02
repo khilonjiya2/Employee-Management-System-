@@ -22,6 +22,7 @@ import '../../presentation/employees/employee_detail_screen.dart';
 
 import '../../presentation/supervisors/supervisors_list_screen.dart';
 import '../../presentation/supervisors/supervisor_employees_screen.dart';
+import '../../presentation/supervisors/supervisor_wallet_screen.dart';
 
 import '../../presentation/attendance/attendance_list_screen.dart';
 import '../../presentation/attendance/attendance_entry_screen.dart';
@@ -189,6 +190,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 builder: (_, state) => SupervisorEmployeesScreen(
                     supervisorId: state.pathParameters['id']!),
               ),
+              GoRoute(
+                name: 'supervisor-wallet',
+                path: ':id/wallet',
+                builder: (_, state) => SupervisorWalletScreen(
+                  supervisorId: state.pathParameters['id']!,
+                  supervisorName: state.extra as String?,
+                ),
+              ),
             ],
           ),
 
@@ -307,6 +316,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: 'settings',
             path: '/settings',
             builder: (_, __) => const SettingsScreen(),
+          ),
+          GoRoute(
+            name: 'advance-payment',
+            path: '/advance-payment',
+            builder: (_, __) => const SupervisorWalletsListScreen(),
+          ),
+          GoRoute(
+            name: 'advance-payment-supervisor',
+            path: '/advance-payment/:id',
+            builder: (_, state) => AdvancePaymentScreen(
+              supervisorId: state.pathParameters['id'],
+            ),
           ),
           GoRoute(
             name: 'notifications',
