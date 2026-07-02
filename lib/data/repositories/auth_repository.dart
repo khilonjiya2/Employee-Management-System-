@@ -828,6 +828,10 @@ class ExpenseRepository {
         .single();
     final expenseId = result['id'] as String;
 
+    // Deduct from supervisor wallet immediately on submission
+    await _client.rpc('deduct_wallet_on_expense_approve',
+        params: {'p_expense_id': expenseId});
+
     await _logAudit('expense_submitted', 'expenses', expenseId);
 
     await _notifyAdmins(
@@ -864,9 +868,7 @@ class ExpenseRepository {
       'admin_remarks': remarks,
     }).eq('id', id);
 
-    // Deduct from supervisor wallet
-    await _client.rpc('deduct_wallet_on_expense_approve', params: {'p_expense_id': id});
-
+    // Wallet already deducted on submission - no change needed on approve
     await _logAudit('expense_approved', 'expenses', id);
 
     if (exp != null) {
