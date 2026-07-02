@@ -320,7 +320,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             name: 'advance-payment',
             path: '/advance-payment',
-            builder: (_, __) => const SupervisorWalletsListScreen(),
+            builder: (_, __) => const AdvancePaymentScreen(),
           ),
           GoRoute(
             name: 'advance-payment-supervisor',
