@@ -4,11 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/utils/app_utils.dart';
+import '../../core/utils/app_utils.dart' as AppUtils;
 import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
 
-// ── Advance amount page (select supervisor + enter amount) ─────────────────
+// â”€â”€ Advance amount page (select supervisor + enter amount) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class AdvancePaymentScreen extends ConsumerStatefulWidget {
   /// If provided, pre-selects a supervisor (from supervisor detail screen)
@@ -64,7 +64,7 @@ class _AdvancePaymentScreenState extends ConsumerState<AdvancePaymentScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Advance of ${CurrencyUtils.format(amount)} given successfully'),
+            content: Text('Advance of ${AppUtils.CurrencyUtils.format(amount)} given successfully'),
             backgroundColor: AppColors.success500,
           ),
         );
@@ -109,7 +109,7 @@ class _AdvancePaymentScreenState extends ConsumerState<AdvancePaymentScreen> {
                   value: w.supervisorId,
                   groupValue: _selectedSupervisorId,
                   title: Text(w.supervisorName ?? ''),
-                  subtitle: Text('${w.supervisorCode} · Balance: ${CurrencyUtils.format(w.balance)}'),
+                  subtitle: Text('${w.supervisorCode} Â· Balance: ${AppUtils.CurrencyUtils.format(w.balance)}'),
                   onChanged: (v) => setState(() => _selectedSupervisorId = v),
                   contentPadding: EdgeInsets.zero,
                 )),
@@ -174,7 +174,7 @@ class _WalletInfoCard extends StatelessWidget {
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           const Text('Balance', style: TextStyle(fontSize: 11, color: AppColors.secondary500)),
-          Text(CurrencyUtils.format(wallet.balance),
+          Text(AppUtils.CurrencyUtils.format(wallet.balance),
               style: const TextStyle(fontWeight: FontWeight.w700,
                   color: AppColors.success600, fontSize: 16, fontFamily: 'Inter')),
         ]),
@@ -183,7 +183,7 @@ class _WalletInfoCard extends StatelessWidget {
   }
 }
 
-// ── Supervisor Wallet Detail Screen ────────────────────────────────────────
+// â”€â”€ Supervisor Wallet Detail Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SupervisorWalletScreen extends ConsumerWidget {
   final String supervisorId;
@@ -202,7 +202,7 @@ class SupervisorWalletScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(supervisorName != null ? '$supervisorName · Wallet' : 'Wallet'),
+        title: Text(supervisorName != null ? '$supervisorName Â· Wallet' : 'Wallet'),
         actions: [
           if (isAdmin)
             IconButton(
@@ -295,19 +295,19 @@ class _BalanceSummaryCard extends StatelessWidget {
         const Text('Available Balance',
             style: TextStyle(color: Colors.white70, fontSize: 13)),
         const SizedBox(height: 4),
-        Text(CurrencyUtils.format(balance),
+        Text(AppUtils.CurrencyUtils.format(balance),
             style: const TextStyle(color: Colors.white, fontSize: 28,
                 fontWeight: FontWeight.w800, fontFamily: 'Inter')),
         const SizedBox(height: 16),
         Row(children: [
           Expanded(child: _MiniStat(
             label: 'Total Given',
-            value: CurrencyUtils.format(advanced),
+            value: AppUtils.CurrencyUtils.format(advanced),
             color: Colors.greenAccent,
           )),
           Expanded(child: _MiniStat(
             label: 'Total Used',
-            value: CurrencyUtils.format(deducted),
+            value: AppUtils.CurrencyUtils.format(deducted),
             color: Colors.orangeAccent,
           )),
         ]),
@@ -387,12 +387,12 @@ class _LedgerTile extends StatelessWidget {
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(note, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
           Text(
-            '${isAdvance ? 'Advance' : 'Expense'} · ${DateUtils.formatDate(date)} · ${status.toUpperCase()}',
+            '${isAdvance ? 'Advance' : 'Expense'} Â· ${AppUtils.DateUtils.formatDate(date)} Â· ${status.toUpperCase()}',
             style: const TextStyle(fontSize: 11, color: AppColors.secondary400),
           ),
         ])),
         Text(
-          '$sign${CurrencyUtils.format(amount)}',
+          '$sign${AppUtils.CurrencyUtils.format(amount)}',
           style: TextStyle(
             fontWeight: FontWeight.w700,
             color: statusColor,
@@ -405,7 +405,7 @@ class _LedgerTile extends StatelessWidget {
   }
 }
 
-// ── All Supervisors Wallet List (Admin view) ────────────────────────────────
+// â”€â”€ All Supervisors Wallet List (Admin view) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SupervisorWalletsListScreen extends ConsumerWidget {
   const SupervisorWalletsListScreen({super.key});
@@ -472,7 +472,7 @@ class SupervisorWalletsListScreen extends ConsumerWidget {
                             ],
                           )),
                           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                            Text(CurrencyUtils.format(w.balance),
+                            Text(AppUtils.CurrencyUtils.format(w.balance),
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.success600,
