@@ -157,19 +157,11 @@ class AdminDashboardScreen extends ConsumerWidget {
                   ),
                   child: Row(
                     children: [
-                      CircleAvatar(
+                      w.GenderAvatar(
                         radius: 28,
-                        backgroundColor: Colors.white24,
-                        backgroundImage: profile?.profilePhotoUrl != null
-                            ? NetworkImage(profile!.profilePhotoUrl!)
-                            : null,
-                        child: profile?.profilePhotoUrl == null
-                            ? const Icon(
-                                Icons.admin_panel_settings_rounded,
-                                color: Colors.white,
-                                size: 28,
-                              )
-                            : null,
+                        photoUrl: profile?.profilePhotoUrl,
+                        gender: profile?.gender,
+                        isAdmin: true,
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -637,24 +629,10 @@ class _SupervisorDashboardScreenState
                     ),
                     child: Row(
                       children: [
-                        CircleAvatar(
+                        w.GenderAvatar(
                           radius: 28,
-                          backgroundColor: Colors.white24,
-                          backgroundImage: profile?.profilePhotoUrl != null
-                              ? NetworkImage(profile!.profilePhotoUrl!)
-                              : null,
-                          child: profile?.profilePhotoUrl == null
-                              ? Text(
-                                  (profile?.fullName.isNotEmpty ?? false)
-                                      ? profile!.fullName[0].toUpperCase()
-                                      : 'S',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                )
-                              : null,
+                          photoUrl: profile?.profilePhotoUrl,
+                          gender: profile?.gender,
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -1120,9 +1098,48 @@ class _SupervisorResetPasswordSheetState extends State<_SupervisorResetPasswordS
       final data = response.data as Map<String, dynamic>?;
       if (data?['success'] != true) throw Exception(data?['error'] ?? 'Failed');
       if (mounted) await showDialog(context: context, builder: (d) => AlertDialog(
-        title: const Text('Password Reset'),
-        content: Text('Password for ${person['name']} has been reset to: Abcd@123\n\nThey will be asked to change it on next login.'),
-        actions: [FilledButton(onPressed: () => Navigator.of(d).pop(), child: const Text('Done'))],
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 8),
+          Container(
+            width: 64, height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.success50,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check_circle_rounded,
+                color: AppColors.success500, size: 40),
+          ),
+          const SizedBox(height: 16),
+          const Text('Password Reset Successfully',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700,
+                  fontFamily: 'Inter'),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 10),
+          RichText(
+            textAlign: TextAlign.center,
+            text: TextSpan(
+              style: const TextStyle(fontSize: 13, color: AppColors.secondary600, height: 1.5),
+              children: [
+                TextSpan(text: '${person['name']}\'s password has been reset to:\n\n'),
+                const TextSpan(text: 'Abcd@123',
+                    style: TextStyle(fontWeight: FontWeight.w800,
+                        fontFamily: 'Inter', color: AppColors.primary600,
+                        fontSize: 16)),
+                const TextSpan(text: '\n\nThey will be asked to change it on next login.'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ]),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.of(d).pop(),
+              child: const Text('Done'),
+            ),
+          ),
+        ],
       ));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
