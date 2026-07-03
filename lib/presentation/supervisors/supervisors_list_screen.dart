@@ -804,7 +804,6 @@ class SupervisorDetailScreen extends ConsumerWidget {
                         photoUrl: sup.profilePhotoUrl,
                         gender: sup.gender,
                       ),
-                      ),
                       const SizedBox(height: 12),
                       Text(sup.name,
                           style:
