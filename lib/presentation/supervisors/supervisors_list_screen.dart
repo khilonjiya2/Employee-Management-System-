@@ -266,6 +266,7 @@ class _SupervisorFormScreenState
   bool _isActive = true;
   bool _isLoading = false;
   bool _showBankDetails = false;
+  String _gender = 'male';
   File? _photoFile;
   String? _existingPhotoUrl;
   List<String> _selectedLocationIds = [];
@@ -322,6 +323,7 @@ class _SupervisorFormScreenState
     _bankNameController.text = sup.bankName ?? '';
     _salaryController.text = sup.monthlySalary.toStringAsFixed(0);
     _isActive = sup.isActive;
+    _gender = sup.gender ?? 'male';
     _existingPhotoUrl = sup.profilePhotoUrl;
     _showBankDetails =
         sup.hasUpi || (sup.bankAccountNumber?.isNotEmpty ?? false);
@@ -396,6 +398,7 @@ class _SupervisorFormScreenState
             : _bankNameController.text.trim(),
         'monthly_salary':
             double.tryParse(_salaryController.text) ?? 0,
+        'gender': _gender,
       };
 
       SupervisorModel supervisor;
@@ -505,7 +508,28 @@ class _SupervisorFormScreenState
                     ValidationUtils.validateRequired(v, 'Name'),
               ),
               const SizedBox(height: 16),
-              // NOTE: Username is no longer a separate field. The login
+              // Gender selector
+              Row(children: [
+                const Icon(Icons.wc_rounded, color: AppColors.secondary400, size: 20),
+                const SizedBox(width: 12),
+                const Text('Gender', style: TextStyle(fontSize: 13, color: AppColors.secondary600)),
+                const SizedBox(width: 20),
+                ...['male', 'female', 'other'].map((g) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(g[0].toUpperCase() + g.substring(1)),
+                    selected: _gender == g,
+                    onSelected: (_) => setState(() => _gender = g),
+                    selectedColor: AppColors.primary100,
+                    labelStyle: TextStyle(
+                      color: _gender == g ? AppColors.primary700 : AppColors.secondary600,
+                      fontWeight: _gender == g ? FontWeight.w600 : FontWeight.normal,
+                      fontSize: 12,
+                    ),
+                  ),
+                )),
+              ]),
+              const SizedBox(height: 16),
               // is now built automatically from the mobile number:
               // mobile@ems.com. Mobile is mandatory for supervisors.
               TextFormField(
