@@ -74,6 +74,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
   String? _locationId;
   String? _supervisorId;
   String _status = 'active';
+  String _gender = 'male';
   File? _photoFile;
   String? _existingPhotoUrl;
   bool _isLoading = false;
@@ -122,6 +123,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
     _departmentId = employee.departmentId;
     _locationId = employee.locationId;
     _status = employee.status;
+    _gender = employee.gender ?? 'male';
     _existingPhotoUrl = employee.employeePhotoUrl;
     _showBankDetails = (employee.upiId?.isNotEmpty ?? false) ||
         (employee.bankAccountNumber?.isNotEmpty ?? false);
@@ -178,6 +180,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
         'location_id': _locationId,
         'supervisor_id': _supervisorId,
         'status': _status,
+        'gender': _gender,
         'upi_id': _upiController.text.trim().isEmpty ? null : _upiController.text.trim(),
         'bank_account_number': _bankAccountController.text.trim().isEmpty ? null : _bankAccountController.text.trim(),
         'bank_ifsc': _bankIfscController.text.trim().isEmpty ? null : _bankIfscController.text.trim().toUpperCase(),
@@ -239,6 +242,28 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
                   decoration: const InputDecoration(labelText: 'Full Name *', prefixIcon: Icon(Icons.person_outline)),
                   validator: (v) => ValidationUtils.validateRequired(v, 'Name'),
                 ),
+                const SizedBox(height: 16),
+                // Gender selector
+                Row(children: [
+                  const Icon(Icons.wc_rounded, color: AppColors.secondary400, size: 20),
+                  const SizedBox(width: 12),
+                  const Text('Gender', style: TextStyle(fontSize: 13, color: AppColors.secondary600)),
+                  const SizedBox(width: 20),
+                  ...['male', 'female', 'other'].map((g) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(g[0].toUpperCase() + g.substring(1)),
+                      selected: _gender == g,
+                      onSelected: (_) => setState(() => _gender = g),
+                      selectedColor: AppColors.primary100,
+                      labelStyle: TextStyle(
+                        color: _gender == g ? AppColors.primary700 : AppColors.secondary600,
+                        fontWeight: _gender == g ? FontWeight.w600 : FontWeight.normal,
+                        fontSize: 12,
+                      ),
+                    ),
+                  )),
+                ]),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _mobileController,
