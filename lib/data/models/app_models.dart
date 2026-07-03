@@ -97,6 +97,7 @@ class EmployeeModel extends Equatable {
   final String? createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? gender;
 
   const EmployeeModel({
     required this.id,
@@ -122,6 +123,7 @@ class EmployeeModel extends Equatable {
     this.createdBy,
     required this.createdAt,
     required this.updatedAt,
+    this.gender,
   });
 
   factory EmployeeModel.fromJson(Map<String, dynamic> json) => EmployeeModel(
@@ -148,6 +150,7 @@ class EmployeeModel extends Equatable {
     createdBy: json['created_by'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
+    gender: json['gender'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -167,6 +170,7 @@ class EmployeeModel extends Equatable {
     'bank_account_number': bankAccountNumber,
     'bank_ifsc': bankIfsc,
     'bank_name': bankName,
+    'gender': gender,
   };
 
   bool get isActive => status == 'active';
@@ -235,6 +239,7 @@ class SupervisorModel extends Equatable {
   final String? createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? gender;
 
   const SupervisorModel({
     required this.id,
@@ -254,6 +259,7 @@ class SupervisorModel extends Equatable {
     this.createdBy,
     required this.createdAt,
     required this.updatedAt,
+    this.gender,
   });
 
   factory SupervisorModel.fromJson(Map<String, dynamic> json) => SupervisorModel(
@@ -270,10 +276,12 @@ class SupervisorModel extends Equatable {
     bankAccountNumber: json['bank_account_number'] as String?,
     bankIfsc: json['bank_ifsc'] as String?,
     bankName: json['bank_name'] as String?,
+    'gender': gender,
     monthlySalary: (json['monthly_salary'] as num?)?.toDouble() ?? 0,
     createdBy: json['created_by'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
+    gender: json['gender'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
