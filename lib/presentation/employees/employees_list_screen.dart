@@ -291,13 +291,16 @@ class _EmployeeCard extends StatelessWidget {
       return CircleAvatar(radius: 24,
           backgroundImage: NetworkImage(employee.employeePhotoUrl!));
     }
+    final isFemale = employee.gender == 'female';
+    final bgColor = isFemale ? const Color(0xFFFCE4EC) : const Color(0xFFE3F2FD);
+    final iconColor = isFemale ? const Color(0xFFE91E63) : const Color(0xFF1565C0);
     return CircleAvatar(
       radius: 24,
-      backgroundColor: AppColors.primary100,
-      child: Text(
-        employee.name.isNotEmpty ? employee.name[0].toUpperCase() : '?',
-        style: const TextStyle(color: AppColors.primary600,
-            fontWeight: FontWeight.w700, fontFamily: 'Inter'),
+      backgroundColor: bgColor,
+      child: Icon(
+        isFemale ? Icons.face_3_rounded : Icons.face_rounded,
+        color: iconColor,
+        size: 26,
       ),
     );
   }
