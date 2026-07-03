@@ -276,7 +276,6 @@ class SupervisorModel extends Equatable {
     bankAccountNumber: json['bank_account_number'] as String?,
     bankIfsc: json['bank_ifsc'] as String?,
     bankName: json['bank_name'] as String?,
-    'gender': gender,
     monthlySalary: (json['monthly_salary'] as num?)?.toDouble() ?? 0,
     createdBy: json['created_by'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
@@ -297,6 +296,7 @@ class SupervisorModel extends Equatable {
     'bank_ifsc': bankIfsc,
     'bank_name': bankName,
     'monthly_salary': monthlySalary,
+    'gender': gender,
   };
 
   bool get hasUpi => upiId != null && upiId!.trim().isNotEmpty;
