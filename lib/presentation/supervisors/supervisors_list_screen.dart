@@ -204,16 +204,24 @@ class _SupervisorCard extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 24,
-              backgroundColor: AppColors.accent100,
+              backgroundColor: supervisor.profilePhotoUrl != null
+                  ? AppColors.accent100
+                  : (supervisor.gender == 'female'
+                      ? const Color(0xFFFCE4EC)
+                      : const Color(0xFFE3F2FD)),
               backgroundImage: supervisor.profilePhotoUrl != null
                   ? NetworkImage(supervisor.profilePhotoUrl!)
                   : null,
               child: supervisor.profilePhotoUrl == null
-                  ? Text(supervisor.name[0].toUpperCase(),
-                      style: const TextStyle(
-                          color: AppColors.accent600,
-                          fontWeight: FontWeight.w700,
-                          fontFamily: 'Inter'))
+                  ? Icon(
+                      supervisor.gender == 'female'
+                          ? Icons.face_3_rounded
+                          : Icons.face_rounded,
+                      color: supervisor.gender == 'female'
+                          ? const Color(0xFFE91E63)
+                          : const Color(0xFF1565C0),
+                      size: 26,
+                    )
                   : null,
             ),
             const SizedBox(width: 12),
@@ -466,16 +474,23 @@ class _SupervisorFormScreenState
                     children: [
                       CircleAvatar(
                         radius: 48,
-                        backgroundColor: AppColors.accent100,
+                        backgroundColor: _gender == 'female'
+                            ? const Color(0xFFFCE4EC)
+                            : const Color(0xFFE3F2FD),
                         backgroundImage: _photoFile != null
                             ? FileImage(_photoFile!) as ImageProvider
                             : _existingPhotoUrl != null
                                 ? NetworkImage(_existingPhotoUrl!)
                                 : null,
-                        child: _photoFile == null &&
-                                _existingPhotoUrl == null
-                            ? const Icon(Icons.person_rounded,
-                                color: AppColors.accent400, size: 48)
+                        child: _photoFile == null && _existingPhotoUrl == null
+                            ? Icon(
+                                _gender == 'female'
+                                    ? Icons.face_3_rounded
+                                    : Icons.face_rounded,
+                                color: _gender == 'female'
+                                    ? const Color(0xFFE91E63)
+                                    : const Color(0xFF1565C0),
+                                size: 48)
                             : null,
                       ),
                       Positioned(
@@ -784,20 +799,11 @@ class SupervisorDetailScreen extends ConsumerWidget {
                 Center(
                   child: Column(
                     children: [
-                      CircleAvatar(
+                      w.GenderAvatar(
                         radius: 52,
-                        backgroundColor: AppColors.accent100,
-                        backgroundImage: sup.profilePhotoUrl != null
-                            ? NetworkImage(sup.profilePhotoUrl!)
-                            : null,
-                        child: sup.profilePhotoUrl == null
-                            ? Text(sup.name[0].toUpperCase(),
-                                style: const TextStyle(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.accent600,
-                                    fontFamily: 'Inter'))
-                            : null,
+                        photoUrl: sup.profilePhotoUrl,
+                        gender: sup.gender,
+                      ),
                       ),
                       const SizedBox(height: 12),
                       Text(sup.name,
