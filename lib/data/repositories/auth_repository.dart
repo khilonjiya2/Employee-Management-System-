@@ -123,7 +123,7 @@ class EmployeeRepository {
           .or('name.ilike.%$search%,employee_code.ilike.%$search%');
     }
     final data =
-        await filterQuery.order('name').range(page * limit, (page + 1) * limit - 1);
+        await filterQuery.order('created_at', ascending: false).range(page * limit, (page + 1) * limit - 1);
     return (data as List)
         .map((e) => EmployeeModel.fromJson(e as Map<String, dynamic>))
         .toList();
