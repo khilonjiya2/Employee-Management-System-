@@ -469,14 +469,23 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
           children: [
             CircleAvatar(
               radius: 48,
-              backgroundColor: AppColors.primary100,
+              backgroundColor: _gender == 'female'
+                  ? const Color(0xFFFCE4EC)
+                  : const Color(0xFFE3F2FD),
               backgroundImage: _photoFile != null
                   ? FileImage(_photoFile!) as ImageProvider
                   : _existingPhotoUrl != null
                       ? NetworkImage(_existingPhotoUrl!)
                       : null,
               child: _photoFile == null && _existingPhotoUrl == null
-                  ? const Icon(Icons.person_rounded, color: AppColors.primary400, size: 48)
+                  ? Icon(
+                      _gender == 'female'
+                          ? Icons.face_3_rounded
+                          : Icons.face_rounded,
+                      color: _gender == 'female'
+                          ? const Color(0xFFE91E63)
+                          : const Color(0xFF1565C0),
+                      size: 48)
                   : null,
             ),
             Positioned(
@@ -723,20 +732,10 @@ class _EmployeeDetailBodyState extends ConsumerState<_EmployeeDetailBody> {
           Center(
             child: Column(
               children: [
-                CircleAvatar(
+                w.GenderAvatar(
                   radius: 48,
-                  backgroundColor: AppColors.primary100,
-                  backgroundImage: employee.employeePhotoUrl != null
-                      ? NetworkImage(employee.employeePhotoUrl!)
-                      : null,
-                  child: employee.employeePhotoUrl == null
-                      ? Text(employee.name[0].toUpperCase(),
-                          style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary500,
-                              fontFamily: 'Inter'))
-                      : null,
+                  photoUrl: employee.employeePhotoUrl,
+                  gender: employee.gender,
                 ),
                 const SizedBox(height: 12),
                 Text(employee.name, style: theme.textTheme.headlineMedium),
