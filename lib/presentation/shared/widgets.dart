@@ -1675,3 +1675,70 @@ class CashfreePayButton extends ConsumerWidget {
     );
   }
 }
+// =============================================================================
+// GENDER AVATAR — shows gender-based icon or photo; used across the app
+// gender: 'male' | 'female' | 'other' | null
+// =============================================================================
+
+class GenderAvatar extends StatelessWidget {
+  final double radius;
+  final String? photoUrl;
+  final String? gender;
+  final String? name; // fallback initial if gender is null
+  final bool isAdmin; // shows admin icon instead of gender icon
+
+  const GenderAvatar({
+    super.key,
+    this.radius = 24,
+    this.photoUrl,
+    this.gender,
+    this.name,
+    this.isAdmin = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (photoUrl != null && photoUrl!.isNotEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundImage: NetworkImage(photoUrl!),
+      );
+    }
+
+    if (isAdmin) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: Colors.white24,
+        child: Icon(Icons.admin_panel_settings_rounded,
+            color: Colors.white, size: radius * 0.95),
+      );
+    }
+
+    final isFemale = gender == 'female';
+    final isOther = gender == 'other';
+    final Color bg;
+    final Color iconColor;
+    final IconData icon;
+
+    if (isFemale) {
+      bg = const Color(0xFFFCE4EC);
+      iconColor = const Color(0xFFE91E63);
+      icon = Icons.face_3_rounded;
+    } else if (isOther) {
+      bg = const Color(0xFFF3E5F5);
+      iconColor = const Color(0xFF7B1FA2);
+      icon = Icons.face_rounded;
+    } else {
+      // male or null
+      bg = const Color(0xFFE3F2FD);
+      iconColor = const Color(0xFF1565C0);
+      icon = Icons.face_rounded;
+    }
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: bg,
+      child: Icon(icon, color: iconColor, size: radius * 1.05),
+    );
+  }
+}
