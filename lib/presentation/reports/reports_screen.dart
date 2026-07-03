@@ -191,15 +191,15 @@ class _AttendanceReportState extends ConsumerState<_AttendanceReport> {
               'Period: ${DateFormat('dd/MM/yyyy').format(_fromDate)} - ${DateFormat('dd/MM/yyyy').format(_toDate)}'),
           pw.Text('Total Records: ${_data.length}'),
           pw.SizedBox(height: 8),
-          pw.Row(children: [
-            pw.Text('Total Present: $totalPresent  ',
+          pw.Wrap(spacing: 16, runSpacing: 4, children: [
+            pw.Text('Total Present: $totalPresent',
                 style: pw.TextStyle(
                     color: PdfColors.green700,
-                    fontWeight: pw.FontWeight.bold)),
+                    fontWeight: pw.FontWeight.bold, fontSize: 8)),
             pw.Text('Total Absent: $totalAbsent',
                 style: pw.TextStyle(
                     color: PdfColors.red700,
-                    fontWeight: pw.FontWeight.bold)),
+                    fontWeight: pw.FontWeight.bold, fontSize: 8)),
           ]),
           pw.SizedBox(height: 16),
           pw.Text('Employee-wise Summary',
@@ -649,7 +649,7 @@ class _ExpenseReportState extends ConsumerState<_ExpenseReport> {
           pw.Text(
               'Period: ${DateFormat('dd/MM/yyyy').format(_fromDate)} - ${DateFormat('dd/MM/yyyy').format(_toDate)}'),
           pw.SizedBox(height: 8),
-          pw.Row(children: [
+          pw.Wrap(spacing: 12, runSpacing: 4, children: [
             pw.Text('Total: Rs.${totalAmount.toStringAsFixed(2)}  ',
                 style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
             pw.Text(
@@ -1012,17 +1012,17 @@ class _PayrollReportState extends ConsumerState<_PayrollReport> {
                 style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
           ),
           pw.SizedBox(height: 8),
-          pw.Row(children: [
-            pw.Text('Emp Gross: Rs.${empGross.toStringAsFixed(2)}  ',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            pw.Text('Deductions: Rs.${empDed.toStringAsFixed(2)}  ',
-                style: pw.TextStyle(color: PdfColors.red700)),
-            pw.Text('Emp Net: Rs.${empNet.toStringAsFixed(2)}  ',
-                style: pw.TextStyle(color: PdfColors.green700, fontWeight: pw.FontWeight.bold)),
-            pw.Text('Sup Net: Rs.${supNet.toStringAsFixed(2)}  ',
-                style: pw.TextStyle(color: PdfColors.blue700, fontWeight: pw.FontWeight.bold)),
+          pw.Wrap(spacing: 12, runSpacing: 4, children: [
+            pw.Text('Emp Gross: Rs.${empGross.toStringAsFixed(2)}',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+            pw.Text('Deductions: Rs.${empDed.toStringAsFixed(2)}',
+                style: pw.TextStyle(color: PdfColors.red700, fontSize: 8)),
+            pw.Text('Emp Net: Rs.${empNet.toStringAsFixed(2)}',
+                style: pw.TextStyle(color: PdfColors.green700, fontWeight: pw.FontWeight.bold, fontSize: 8)),
+            pw.Text('Sup Net: Rs.${supNet.toStringAsFixed(2)}',
+                style: pw.TextStyle(color: PdfColors.blue700, fontWeight: pw.FontWeight.bold, fontSize: 8)),
             pw.Text('Total: Rs.${totalNet.toStringAsFixed(2)}',
-                style: pw.TextStyle(color: PdfColors.green900, fontWeight: pw.FontWeight.bold)),
+                style: pw.TextStyle(color: PdfColors.green900, fontWeight: pw.FontWeight.bold, fontSize: 8)),
           ]),
           pw.SizedBox(height: 16),
           pw.Text('Employee Payroll',
