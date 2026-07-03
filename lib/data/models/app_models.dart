@@ -12,6 +12,7 @@ class ProfileModel extends Equatable {
   final bool mustChangePassword;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? gender;
 
   const ProfileModel({
     required this.id,
@@ -25,6 +26,7 @@ class ProfileModel extends Equatable {
     required this.mustChangePassword,
     required this.createdAt,
     required this.updatedAt,
+    this.gender,
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) => ProfileModel(
@@ -40,6 +42,7 @@ class ProfileModel extends Equatable {
             json['must_change_password'] as bool? ?? false,
         createdAt: DateTime.parse(json['created_at'] as String),
         updatedAt: DateTime.parse(json['updated_at'] as String),
+        gender: json['gender'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -54,6 +57,7 @@ class ProfileModel extends Equatable {
         'must_change_password': mustChangePassword,
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
+        'gender': gender,
       };
 
   bool get isAdmin => role == 'admin';
