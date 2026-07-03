@@ -1105,7 +1105,7 @@ class _SupervisorResetPasswordSheetState extends State<_SupervisorResetPasswordS
   Future<void> _reset(Map<String, dynamic> person) async {
     final confirm = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
       title: const Text('Reset Password?'),
-      content: Text('Set a temporary password for ${person['name']}. They will be asked to change it on next login.'),
+      content: Text('Password for ${person['name']} will be reset to default: Abcd@123\n\nThey will be asked to change it on next login.'),
       actions: [
         TextButton(onPressed: () => Navigator.of(d).pop(false), child: const Text('Cancel')),
         FilledButton(onPressed: () => Navigator.of(d).pop(true), child: const Text('Reset')),
@@ -1121,7 +1121,7 @@ class _SupervisorResetPasswordSheetState extends State<_SupervisorResetPasswordS
       if (data?['success'] != true) throw Exception(data?['error'] ?? 'Failed');
       if (mounted) await showDialog(context: context, builder: (d) => AlertDialog(
         title: const Text('Password Reset'),
-        content: Text('Temporary password for ${person['name']}:\n\n${data!['temp_password']}\n\nShare this securely.'),
+        content: Text('Password for ${person['name']} has been reset to: Abcd@123\n\nThey will be asked to change it on next login.'),
         actions: [FilledButton(onPressed: () => Navigator.of(d).pop(), child: const Text('Done'))],
       ));
     } catch (e) {
