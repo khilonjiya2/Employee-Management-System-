@@ -196,6 +196,7 @@ class EmployeeRepository {
       'p_company_id': companyId,
       'p_created_by': _client.auth.currentUser?.id,
       'p_supervisor_id': data['supervisor_id'],
+      'p_gender': data['gender'],
     }) as String;
 
     final result = await _client
