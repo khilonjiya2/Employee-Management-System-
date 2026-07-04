@@ -1095,13 +1095,10 @@ class _ExpenseSupervisorDrilldownScreenState extends ConsumerState<ExpenseSuperv
                     ),
                     child: Row(
                       children: [
-                        CircleAvatar(
+                        w.GenderAvatar(
                           radius: 22,
-                          backgroundColor: AppColors.accent100,
-                          child: Text(
-                            supervisorName.isNotEmpty ? supervisorName[0].toUpperCase() : '?',
-                            style: const TextStyle(color: AppColors.accent600, fontWeight: FontWeight.w700, fontFamily: 'Inter'),
-                          ),
+                          photoUrl: expenses.first.supervisorPhotoUrl,
+                          gender: expenses.first.supervisorGender,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
