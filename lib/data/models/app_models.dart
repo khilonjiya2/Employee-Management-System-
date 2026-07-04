@@ -438,6 +438,8 @@ class ExpenseModel extends Equatable {
   final String id;
   final String supervisorId;
   final String? supervisorName;
+  final String? supervisorGender;
+  final String? supervisorPhotoUrl;
   final DateTime expenseDate;
   final String category;
   final String expenseName;
@@ -460,6 +462,8 @@ class ExpenseModel extends Equatable {
     required this.id,
     required this.supervisorId,
     this.supervisorName,
+    this.supervisorGender,
+    this.supervisorPhotoUrl,
     required this.expenseDate,
     required this.category,
     required this.expenseName,
@@ -483,6 +487,8 @@ class ExpenseModel extends Equatable {
     id: json['id'] as String,
     supervisorId: json['supervisor_id'] as String,
     supervisorName: json['supervisors'] != null ? (json['supervisors'] as Map)['name'] as String? : null,
+    supervisorGender: json['supervisors'] != null ? (json['supervisors'] as Map)['gender'] as String? : null,
+    supervisorPhotoUrl: json['supervisors'] != null ? (json['supervisors'] as Map)['profile_photo_url'] as String? : null,
     expenseDate: DateTime.parse(json['expense_date'] as String),
     category: json['category'] as String,
     expenseName: json['expense_name'] as String,
@@ -558,6 +564,8 @@ class PayrollModel extends Equatable {
   final String employeeId;
   final String? employeeName;
   final String? employeeCode;
+  final String? employeeGender;
+  final String? employeePhotoUrl;
   final int payrollMonth;
   final int payrollYear;
   final double dailyWageRate;
@@ -623,6 +631,8 @@ class PayrollModel extends Equatable {
     employeeId: json['employee_id'] as String,
     employeeName: json['employees'] != null ? (json['employees'] as Map)['name'] as String? : null,
     employeeCode: json['employees'] != null ? (json['employees'] as Map)['employee_code'] as String? : null,
+    employeeGender: json['employees'] != null ? (json['employees'] as Map)['gender'] as String? : null,
+    employeePhotoUrl: json['employees'] != null ? (json['employees'] as Map)['employee_photo_url'] as String? : null,
     payrollMonth: json['payroll_month'] as int,
     payrollYear: json['payroll_year'] as int,
     dailyWageRate: (json['daily_wage_rate'] as num).toDouble(),
