@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart';
 import '../../data/models/app_models.dart';
+import '../shared/widgets.dart' show GenderAvatar;
 import '../../data/repositories/auth_repository.dart';
 import '../shared/widgets.dart' as w;
 
@@ -218,18 +219,20 @@ void dispose() {
 
   void _applyFilters({String? searchQuery}) {
     final query = searchQuery ?? _searchController.text;
+    final selectedDay = DateTime(
+        _selectedDate.year, _selectedDate.month, _selectedDate.day);
     setState(() {
       _filteredEmployees = _allEmployees.where((e) {
         final matchesSearch = query.isEmpty ||
             e.name.toLowerCase().contains(query.toLowerCase());
-        // Only show employees linked to the selected location. If an
-        // employee has no location set, we still show them (treat as
-        // unassigned/shared) rather than silently hiding them \u{2014} admins
-        // can set employees.location_id to tighten this further.
         final matchesLocation = _selectedLocationId == null ||
             e.locationId == null ||
             e.locationId == _selectedLocationId;
-        return matchesSearch && matchesLocation;
+        // Only show employees who had joined on or before selected date
+        final joiningDay = DateTime(
+            e.joiningDate.year, e.joiningDate.month, e.joiningDate.day);
+        final hasJoined = !joiningDay.isAfter(selectedDay);
+        return matchesSearch && matchesLocation && hasJoined;
       }).toList();
     });
   }
@@ -671,10 +674,13 @@ Widget build(BuildContext context) {
     final date = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 7)),
+      firstDate: DateTime(2000),
       lastDate: DateTime.now(),
     );
-    if (date != null) setState(() => _selectedDate = date);
+    if (date != null) setState(() {
+      _selectedDate = date;
+      _applyFilters();
+    });
   }
 }
 
@@ -733,19 +739,10 @@ class _EmployeeAttendanceRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
+          GenderAvatar(
             radius: 18,
-            backgroundColor: AppColors.primary100,
-            child: Text(
-              employee.name.isNotEmpty
-                  ? employee.name[0].toUpperCase()
-                  : '?',
-              style: const TextStyle(
-                color: AppColors.primary600,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
-            ),
+            photoUrl: employee.employeePhotoUrl,
+            gender: employee.gender,
           ),
 
           const SizedBox(width: 10),
