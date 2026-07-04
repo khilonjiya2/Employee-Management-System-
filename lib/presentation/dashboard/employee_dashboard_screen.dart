@@ -169,24 +169,10 @@ class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> 
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
+                  w.GenderAvatar(
                     radius: 28,
-                    backgroundColor: Colors.white24,
-                    backgroundImage: widget.employee.employeePhotoUrl != null
-                        ? NetworkImage(widget.employee.employeePhotoUrl!)
-                        : null,
-                    child: widget.employee.employeePhotoUrl == null
-                        ? Text(
-                            widget.employee.name.isNotEmpty
-                                ? widget.employee.name[0].toUpperCase()
-                                : 'E',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          )
-                        : null,
+                    photoUrl: widget.employee.employeePhotoUrl,
+                    gender: widget.employee.gender,
                   ),
                   const SizedBox(width: 14),
                   Expanded(
