@@ -1729,10 +1729,10 @@ class GenderAvatar extends StatelessWidget {
       iconColor = const Color(0xFF7B1FA2);
       icon = Icons.face_rounded;
     } else {
-      // male or null
-      bg = const Color(0xFFE3F2FD);
-      iconColor = const Color(0xFF1565C0);
-      icon = Icons.face_rounded;
+      // male
+      bg = const Color(0xFFE8EAF6);
+      iconColor = const Color(0xFF283593);
+      icon = Icons.face_6_rounded; // more masculine face icon
     }
 
     return CircleAvatar(
