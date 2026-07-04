@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../shared/widgets.dart' as w;
 
 final _supervisorEmployeesProvider = FutureProvider.autoDispose
     .family<List<EmployeeModel>, String>((ref, supervisorId) async {
@@ -78,21 +79,10 @@ class SupervisorEmployeesScreen extends ConsumerWidget {
                   child: ListTile(
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: CircleAvatar(
-                      backgroundColor: AppColors.primary100,
-                      backgroundImage: emp.employeePhotoUrl != null
-                          ? NetworkImage(emp.employeePhotoUrl!)
-                          : null,
-                      child: emp.employeePhotoUrl == null
-                          ? Text(
-                              emp.name.isNotEmpty
-                                  ? emp.name[0].toUpperCase()
-                                  : '?',
-                              style: const TextStyle(
-                                  color: AppColors.primary600,
-                                  fontWeight: FontWeight.w700),
-                            )
-                          : null,
+                    leading: w.GenderAvatar(
+                      radius: 22,
+                      photoUrl: emp.employeePhotoUrl,
+                      gender: emp.gender,
                     ),
                     title: Text(
                       emp.name,
