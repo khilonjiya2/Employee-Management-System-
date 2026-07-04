@@ -353,16 +353,10 @@ Widget build(BuildContext context, WidgetRef ref) {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                CircleAvatar(
+                w.GenderAvatar(
                   radius: 22,
-                  backgroundColor: AppColors.primary100,
-                  child: Text(
-                    (payroll.employeeName ?? 'E')[0].toUpperCase(),
-                    style: const TextStyle(
-                        color: AppColors.primary600,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Inter'),
-                  ),
+                  photoUrl: null,
+                  gender: payroll.employeeGender,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -456,16 +450,10 @@ class _SupervisorPayrollCard extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                CircleAvatar(
+                w.GenderAvatar(
                   radius: 22,
-                  backgroundColor: AppColors.accent100,
-                  child: Text(
-                    supervisor.name.isNotEmpty ? supervisor.name[0].toUpperCase() : 'S',
-                    style: const TextStyle(
-                        color: AppColors.accent600,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Inter'),
-                  ),
+                  photoUrl: supervisor.profilePhotoUrl,
+                  gender: supervisor.gender,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -845,10 +833,10 @@ class _PayrollProcessScreenState extends ConsumerState<PayrollProcessScreen> {
                           },
                           title: Text(emp.name, style: Theme.of(context).textTheme.titleMedium),
                           subtitle: Text('${emp.employeeCode} \u{2022} \u{20B9}${emp.dailyWageRate}/day', style: Theme.of(context).textTheme.bodySmall),
-                          secondary: CircleAvatar(
+                          secondary: w.GenderAvatar(
                             radius: 18,
-                            backgroundColor: AppColors.primary100,
-                            child: Text(emp.name[0].toUpperCase(), style: const TextStyle(color: AppColors.primary600, fontFamily: 'Inter', fontSize: 13)),
+                            photoUrl: emp.employeePhotoUrl,
+                            gender: emp.gender,
                           ),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           tileColor: Theme.of(context).colorScheme.surface,
