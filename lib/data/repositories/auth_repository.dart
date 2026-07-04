@@ -789,7 +789,7 @@ class ExpenseRepository {
   }) async {
     var filterQuery = _client
         .from('expenses')
-        .select('*, supervisors(name), expense_attachments(*)');
+        .select('*, supervisors(name, gender, profile_photo_url), expense_attachments(*)');
     if (supervisorId != null) {
       filterQuery = filterQuery.eq('supervisor_id', supervisorId);
     }
@@ -814,7 +814,7 @@ class ExpenseRepository {
   Future<ExpenseModel?> getById(String id) async {
     final data = await _client
         .from('expenses')
-        .select('*, supervisors(name), expense_attachments(*)')
+        .select('*, supervisors(name, gender, profile_photo_url), expense_attachments(*)')
         .eq('id', id)
         .maybeSingle();
     if (data == null) return null;
@@ -825,7 +825,7 @@ class ExpenseRepository {
     final result = await _client
         .from('expenses')
         .insert(data)
-        .select('*, supervisors(name)')
+        .select('*, supervisors(name, gender, profile_photo_url)')
         .single();
     final expenseId = result['id'] as String;
 
@@ -850,7 +850,7 @@ class ExpenseRepository {
         .from('expenses')
         .update(data)
         .eq('id', id)
-        .select('*, supervisors(name)')
+        .select('*, supervisors(name, gender, profile_photo_url)')
         .single();
     return ExpenseModel.fromJson(result);
   }
@@ -970,7 +970,7 @@ class ExpenseRepository {
   }) async {
     var filterQuery = _client
         .from('expenses')
-        .select('*, supervisors(name), expense_attachments(*)');
+        .select('*, supervisors(name, gender, profile_photo_url), expense_attachments(*)');
     if (status != null) filterQuery = filterQuery.eq('status', status);
     final data = await filterQuery.order('expense_date', ascending: false);
 
@@ -1067,7 +1067,7 @@ class PayrollRepository {
   Future<List<PayrollModel>> getByMonthYear(int month, int year) async {
     final data = await _client
         .from('payroll')
-        .select('*, employees(name, employee_code)')
+        .select('*, employees(name, employee_code, gender, employee_photo_url)')
         .eq('payroll_month', month)
         .eq('payroll_year', year)
         .order('created_at', ascending: false);
@@ -1080,7 +1080,7 @@ class PayrollRepository {
       String employeeId, int month, int year) async {
     final data = await _client
         .from('payroll')
-        .select('*, employees(name, employee_code)')
+        .select('*, employees(name, employee_code, gender, employee_photo_url)')
         .eq('employee_id', employeeId)
         .eq('payroll_month', month)
         .eq('payroll_year', year)
@@ -1093,7 +1093,7 @@ class PayrollRepository {
   Future<List<PayrollModel>> getOwnPayrollHistory(String employeeId, {int limit = 12}) async {
     final data = await _client
         .from('payroll')
-        .select('*, employees(name, employee_code)')
+        .select('*, employees(name, employee_code, gender, employee_photo_url)')
         .eq('employee_id', employeeId)
         .order('payroll_year', ascending: false)
         .order('payroll_month', ascending: false)
@@ -1217,7 +1217,7 @@ class PayrollRepository {
         .from('payroll')
         .upsert(payrollData,
             onConflict: 'employee_id, payroll_month, payroll_year')
-        .select('*, employees(name, employee_code)')
+        .select('*, employees(name, employee_code, gender, employee_photo_url)')
         .single();
 
     return PayrollModel.fromJson(result);
@@ -1228,7 +1228,7 @@ class PayrollRepository {
         .from('payroll')
         .update(data)
         .eq('id', id)
-        .select('*, employees(name, employee_code)')
+        .select('*, employees(name, employee_code, gender, employee_photo_url)')
         .single();
     return PayrollModel.fromJson(result);
   }
