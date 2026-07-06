@@ -253,6 +253,16 @@ void dispose() {
       );
       return;
     }
+    if (_filteredEmployees.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No employees had joined by this date. Please select a later date.'),
+          backgroundColor: AppColors.error500,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 

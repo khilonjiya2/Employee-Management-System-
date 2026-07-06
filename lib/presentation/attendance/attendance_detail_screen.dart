@@ -216,24 +216,10 @@ class _AttendanceDetailBody extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            CircleAvatar(
+                            w.GenderAvatar(
                               radius: 22,
-                              backgroundColor: isPresent
-                                  ? AppColors.success500.withOpacity(0.15)
-                                  : AppColors.error500.withOpacity(0.15),
-                              child: Text(
-                                (d.employeeName?.isNotEmpty == true)
-                                    ? d.employeeName![0].toUpperCase()
-                                    : '?',
-                                style: TextStyle(
-                                  color: isPresent
-                                      ? AppColors.success700
-                                      : AppColors.error600,
-                                  fontWeight: FontWeight.w700,
-                                  fontFamily: 'Inter',
-                                  fontSize: 16,
-                                ),
-                              ),
+                              photoUrl: null,
+                              gender: null,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
