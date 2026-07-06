@@ -926,7 +926,6 @@ class SupervisorDetailScreen extends ConsumerWidget {
                               photoUrl: e.employeePhotoUrl,
                               gender: e.gender,
                             ),
-                            ),
                             title: Text(e.name),
                             subtitle: Text(e.employeeCode),
                             trailing: w.StatusBadge(status: e.status),
