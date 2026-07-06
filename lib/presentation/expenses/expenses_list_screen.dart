@@ -760,9 +760,11 @@ class ExpenseDetailScreen extends ConsumerWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              exp.utrReference != null
-                  ? 'Paid via UPI \u{B7} UTR: ${exp.utrReference}'
-                  : 'Paid via UPI',
+              exp.paymentConfirmedAt != null
+                  ? 'Paid on ${DateTimeUtils.formatDate(exp.paymentConfirmedAt!)}'
+                  : exp.utrReference != null
+                      ? 'Paid \u{B7} UTR: ${exp.utrReference}'
+                      : 'Paid',
               style: const TextStyle(color: AppColors.success700, fontFamily: 'Inter', fontWeight: FontWeight.w600),
             ),
           ),
