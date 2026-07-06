@@ -10,7 +10,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/utils/app_utils.dart';
+import '../../core/utils/app_utils.dart' as AppUtils;
 import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../shared/widgets.dart' as w;
@@ -224,7 +224,7 @@ class _ExpenseCard extends ConsumerWidget {
                   Text(expense.expenseName, style: theme.textTheme.titleMedium, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
                   Text(
-                    '${StringUtils.capitalize(expense.category)} \u{2022} ${DateFormat('dd/MM/yyyy').format(expense.expenseDate)}',
+                    '${AppUtils.StringUtils.capitalize(expense.category)} \u{2022} ${DateFormat('dd/MM/yyyy').format(expense.expenseDate)}',
                     style: theme.textTheme.bodySmall,
                   ),
                   if (expense.supervisorName != null)
@@ -236,7 +236,7 @@ class _ExpenseCard extends ConsumerWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(CurrencyUtils.format(expense.amount), style: theme.textTheme.titleMedium?.copyWith(color: AppColors.primary600)),
+                Text(AppUtils.CurrencyUtils.format(expense.amount), style: theme.textTheme.titleMedium?.copyWith(color: AppColors.primary600)),
                 const SizedBox(height: 4),
                 w.StatusBadge(status: expense.status),
                 if (expense.isApproved) ...[
@@ -419,7 +419,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 decoration: const InputDecoration(labelText: 'Category *', prefixIcon: Icon(Icons.category_outlined)),
                 items: AppConstants.expenseCategories.map((c) => DropdownMenuItem(
                   value: c,
-                  child: Text(StringUtils.capitalize(c)),
+                  child: Text(AppUtils.StringUtils.capitalize(c)),
                 )).toList(),
                 onChanged: (v) => setState(() => _category = v ?? 'travel'),
               ),
@@ -427,7 +427,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(labelText: 'Expense Name *', prefixIcon: Icon(Icons.receipt_outlined)),
-                validator: (v) => ValidationUtils.validateRequired(v, 'Expense name'),
+                validator: (v) => AppUtils.ValidationUtils.validateRequired(v, 'Expense name'),
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -440,7 +440,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 controller: _amountController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(labelText: 'Amount (\u{20B9}) *', prefixIcon: Icon(Icons.currency_rupee_rounded)),
-                validator: ValidationUtils.validateAmount,
+                validator: AppUtils.ValidationUtils.validateAmount,
               ),
               const SizedBox(height: 24),
               Text('Receipt', style: theme.textTheme.titleMedium),
@@ -622,7 +622,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
               children: [
                 Text(exp.expenseName, style: theme.textTheme.headlineSmall),
                 const SizedBox(height: 4),
-                Text(StringUtils.capitalize(exp.category), style: theme.textTheme.bodySmall),
+                Text(AppUtils.StringUtils.capitalize(exp.category), style: theme.textTheme.bodySmall),
                 if (exp.supervisorName != null) Text('By: ${exp.supervisorName}', style: theme.textTheme.bodySmall),
               ],
             ),
@@ -630,7 +630,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(CurrencyUtils.format(exp.amount), style: theme.textTheme.headlineLarge?.copyWith(color: AppColors.primary600)),
+              Text(AppUtils.CurrencyUtils.format(exp.amount), style: theme.textTheme.headlineLarge?.copyWith(color: AppColors.primary600)),
               const SizedBox(height: 4),
               w.StatusBadge(status: exp.status),
             ],
@@ -655,7 +655,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
           Text('Details', style: theme.textTheme.titleMedium),
           const Divider(),
           _Row(label: 'Date', value: DateFormat('dd MMMM yyyy').format(exp.expenseDate)),
-          _Row(label: 'Category', value: StringUtils.capitalize(exp.category)),
+          _Row(label: 'Category', value: AppUtils.StringUtils.capitalize(exp.category)),
           if (exp.description != null) _Row(label: 'Description', value: exp.description!),
           _Row(label: 'Submitted', value: DateFormat('dd/MM/yyyy HH:mm').format(exp.createdAt.toLocal())),
           if (exp.reviewedAt != null) _Row(label: 'Reviewed', value: DateFormat('dd/MM/yyyy HH:mm').format(exp.reviewedAt!.toLocal())),
@@ -761,7 +761,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
           Expanded(
             child: Text(
               exp.paymentConfirmedAt != null
-                  ? 'Paid on ${DateUtils.formatDate(exp.paymentConfirmedAt!)}'
+                  ? 'Paid on ${AppUtils.DateUtils.formatDate(exp.paymentConfirmedAt!)}'
                   : exp.utrReference != null
                       ? 'Paid \u{B7} UTR: ${exp.utrReference}'
                       : 'Paid',
@@ -800,7 +800,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
         } catch (e) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(ErrorUtils.friendly(e)), backgroundColor: AppColors.error500),
+              SnackBar(content: Text(AppUtils.ErrorUtils.friendly(e)), backgroundColor: AppColors.error500),
             );
           }
         }
@@ -1116,7 +1116,7 @@ class _ExpenseSupervisorDrilldownScreenState extends ConsumerState<ExpenseSuperv
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(CurrencyUtils.format(total),
+                            Text(AppUtils.CurrencyUtils.format(total),
                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.primary600)),
                             const Icon(Icons.chevron_right_rounded, color: AppColors.secondary400, size: 18),
                           ],
@@ -1213,7 +1213,7 @@ class ExpenseMonthDrilldownScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Text(CurrencyUtils.format(total),
+                  Text(AppUtils.CurrencyUtils.format(total),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.primary600)),
                   const SizedBox(width: 4),
                   const Icon(Icons.chevron_right_rounded, color: AppColors.secondary400, size: 18),
@@ -1246,7 +1246,7 @@ class ExpenseMonthListScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             color: AppColors.primary50,
             child: Text(
-              'Total: ${CurrencyUtils.format(total)}',
+              'Total: ${AppUtils.CurrencyUtils.format(total)}',
               style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary600, fontFamily: 'Inter', fontSize: 16),
             ),
           ),
@@ -1275,7 +1275,7 @@ class ExpenseMonthListScreen extends StatelessWidget {
                             children: [
                               Text(exp.expenseName, style: Theme.of(context).textTheme.titleSmall),
                               Text(
-                                '${StringUtils.capitalize(exp.category)} \u{2022} ${DateFormat('dd/MM/yyyy').format(exp.expenseDate)}',
+                                '${AppUtils.StringUtils.capitalize(exp.category)} \u{2022} ${DateFormat('dd/MM/yyyy').format(exp.expenseDate)}',
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ],
@@ -1284,7 +1284,7 @@ class ExpenseMonthListScreen extends StatelessWidget {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(CurrencyUtils.format(exp.amount),
+                            Text(AppUtils.CurrencyUtils.format(exp.amount),
                                 style: Theme.of(context).textTheme.titleSmall?.copyWith(color: AppColors.primary600)),
                             w.StatusBadge(status: exp.status),
                           ],
