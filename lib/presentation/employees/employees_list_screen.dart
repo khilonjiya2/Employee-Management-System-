@@ -287,21 +287,10 @@ class _EmployeeCard extends StatelessWidget {
   }
 
   Widget _buildAvatar() {
-    if (employee.employeePhotoUrl != null) {
-      return CircleAvatar(radius: 24,
-          backgroundImage: NetworkImage(employee.employeePhotoUrl!));
-    }
-    final isFemale = employee.gender == 'female';
-    final bgColor = isFemale ? const Color(0xFFFCE4EC) : const Color(0xFFE3F2FD);
-    final iconColor = isFemale ? const Color(0xFFE91E63) : const Color(0xFF1565C0);
-    return CircleAvatar(
+    return w.GenderAvatar(
       radius: 24,
-      backgroundColor: bgColor,
-      child: Icon(
-        isFemale ? Icons.face_3_rounded : Icons.face_rounded,
-        color: iconColor,
-        size: 26,
-      ),
+      photoUrl: employee.employeePhotoUrl,
+      gender: employee.gender,
     );
   }
 }

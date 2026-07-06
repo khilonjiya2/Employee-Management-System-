@@ -467,27 +467,16 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
         onTap: _pickPhoto,
         child: Stack(
           children: [
-            CircleAvatar(
-              radius: 48,
-              backgroundColor: _gender == 'female'
-                  ? const Color(0xFFFCE4EC)
-                  : const Color(0xFFE3F2FD),
-              backgroundImage: _photoFile != null
-                  ? FileImage(_photoFile!) as ImageProvider
-                  : _existingPhotoUrl != null
-                      ? NetworkImage(_existingPhotoUrl!)
-                      : null,
-              child: _photoFile == null && _existingPhotoUrl == null
-                  ? Icon(
-                      _gender == 'female'
-                          ? Icons.face_3_rounded
-                          : Icons.face_rounded,
-                      color: _gender == 'female'
-                          ? const Color(0xFFE91E63)
-                          : const Color(0xFF1565C0),
-                      size: 48)
-                  : null,
-            ),
+            _photoFile != null
+                ? CircleAvatar(
+                    radius: 48,
+                    backgroundImage: FileImage(_photoFile!),
+                  )
+                : w.GenderAvatar(
+                    radius: 48,
+                    photoUrl: _existingPhotoUrl,
+                    gender: _gender,
+                  ),
             Positioned(
               bottom: 0,
               right: 0,
