@@ -598,8 +598,6 @@ class PayrollModel extends Equatable {
     required this.employeeId,
     this.employeeName,
     this.employeeCode,
-    this.employeeGender,
-    this.employeePhotoUrl,
     required this.payrollMonth,
     required this.payrollYear,
     required this.dailyWageRate,
