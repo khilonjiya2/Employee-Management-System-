@@ -7,7 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart';
 import '../../data/repositories/auth_repository.dart';
-import '../shared/widgets.dart' show PinSetupSheet;
+import '../shared/widgets.dart' show PinSetupSheet, GenderAvatar;
+import '../shared/widgets.dart' as w;
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -134,27 +135,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     onTap: _pickAndUploadPhoto,
                     child: Stack(
                       children: [
-                        CircleAvatar(
-                          radius: 32,
-                          backgroundColor: AppColors.primary100,
-                          backgroundImage: _newPhotoFile != null
-                              ? FileImage(_newPhotoFile!) as ImageProvider
-                              : profile?.profilePhotoUrl != null
-                                  ? NetworkImage(profile!.profilePhotoUrl!)
-                                  : null,
-                          child: _newPhotoFile == null &&
-                                  profile?.profilePhotoUrl == null
-                              ? Text(
-                                  (profile?.fullName ?? 'U')[0].toUpperCase(),
-                                  style: const TextStyle(
-                                    color: AppColors.primary600,
-                                    fontFamily: 'Inter',
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                )
-                              : null,
-                        ),
+                        _newPhotoFile != null
+                            ? CircleAvatar(
+                                radius: 32,
+                                backgroundImage: FileImage(_newPhotoFile!),
+                              )
+                            : w.GenderAvatar(
+                                radius: 32,
+                                photoUrl: profile?.profilePhotoUrl,
+                                gender: profile?.gender,
+                                isAdmin: profile?.role == 'admin',
+                              ),
                         if (_isUploadingPhoto)
                           const Positioned.fill(
                             child: CircleAvatar(
@@ -200,16 +191,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         if (profile?.mobile != null)
                           Text(profile!.mobile!,
                               style: theme.textTheme.bodySmall),
+                        const SizedBox(height: 6),
+                        // Gender selector — available to everyone
+                        Row(children: [
+                          ...['male', 'female', 'other'].map((g) => Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: GestureDetector(
+                              onTap: () async {
+                                final client = ref.read(supabaseProvider);
+                                final user = client.auth.currentUser;
+                                if (user == null) return;
+                                await client.from('profiles')
+                                    .update({'gender': g}).eq('id', user.id);
+                                ref.invalidate(currentProfileProvider);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: profile?.gender == g
+                                      ? AppColors.primary500
+                                      : AppColors.secondary100,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  g[0].toUpperCase() + g.substring(1),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: profile?.gender == g
+                                        ? Colors.white
+                                        : AppColors.secondary500,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )),
+                        ]),
                       ],
                     ),
                   ),
-                  if (profile?.isAdmin == true)
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined,
-                          color: AppColors.primary500),
-                      onPressed: () => _showEditName(
-                          context, ref, profile?.fullName ?? ''),
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined,
+                        color: AppColors.primary500),
+                    onPressed: () => _showEditName(
+                        context, ref, profile?.fullName ?? ''),
+                  ),
                 ],
               ),
             ),
@@ -265,13 +291,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => _showResetPassword(context, ref),
             ),
-            ListTile(
-              leading: const Icon(Icons.pin_outlined),
-              title: const Text('Payout PIN'),
-              subtitle: const Text('Set or change the 4-digit PIN required to initiate payments'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => _showPayoutPinSetup(context, ref),
-            ),
+            if (ref.watch(paymentModuleEnabledProvider))
+              ListTile(
+                leading: const Icon(Icons.pin_outlined),
+                title: const Text('Payout PIN'),
+                subtitle: const Text('Set or change the 4-digit PIN required to initiate payments'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => _showPayoutPinSetup(context, ref),
+              ),
           ],
 
           // About
@@ -582,11 +609,23 @@ class _LocationsManagerState extends State<_LocationsManager> {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
-    // Close the dialog FIRST using its own context, before any async work.
-    // This is the fix for bug #6: the old code called Navigator.pop(context)
-    // using the _LocationsManagerState's context (the bottom sheet's context)
-    // instead of the dialog's own context, so the dialog never actually
-    // closed even though the insert succeeded.
+    // Check for duplicate name within the same company before closing dialog
+    final profile = widget.ref.read(currentProfileProvider).valueOrNull;
+    final companyId = profile?.companyId;
+    final duplicate = _locations.any(
+      (l) => (l['name'] as String).toLowerCase() == name.toLowerCase()
+          && (companyId == null || l['company_id'] == companyId),
+    );
+    if (duplicate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('A location named "$name" already exists.'),
+          backgroundColor: AppColors.error500,
+        ),
+      );
+      return;
+    }
+
     Navigator.of(dialogContext).pop();
 
     final user = widget.ref.read(supabaseProvider).auth.currentUser;
@@ -598,6 +637,7 @@ class _LocationsManagerState extends State<_LocationsManager> {
             : _addressController.text.trim(),
         'is_active': true,
         'created_by': user?.id,
+        if (companyId != null) 'company_id': companyId,
       });
       _nameController.clear();
       _addressController.clear();
@@ -1022,11 +1062,11 @@ class _ResetPasswordSheetState extends State<_ResetPasswordSheet> {
     try {
       final employees = await client
           .from('employees')
-          .select('profile_id, name, employee_code')
+          .select('profile_id, name, employee_code, gender, employee_photo_url')
           .not('profile_id', 'is', null);
       final supervisors = await client
           .from('supervisors')
-          .select('profile_id, name, supervisor_code')
+          .select('profile_id, name, supervisor_code, gender, profile_photo_url')
           .not('profile_id', 'is', null);
 
       final people = <Map<String, dynamic>>[
@@ -1035,12 +1075,16 @@ class _ResetPasswordSheetState extends State<_ResetPasswordSheet> {
               'name': e['name'],
               'code': e['employee_code'],
               'role': 'Employee',
+              'gender': e['gender'],
+              'photo': e['employee_photo_url'],
             }),
         ...(supervisors as List).map((s) => {
               'profile_id': s['profile_id'],
               'name': s['name'],
               'code': s['supervisor_code'],
               'role': 'Supervisor',
+              'gender': s['gender'],
+              'photo': s['profile_photo_url'],
             }),
       ];
       people.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
@@ -1169,15 +1213,10 @@ class _ResetPasswordSheetState extends State<_ResetPasswordSheet> {
                       itemBuilder: (_, i) {
                         final person = _filtered[i];
                         return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: person['role'] == 'Supervisor'
-                                ? AppColors.accent100
-                                : AppColors.primary100,
-                            child: Text(
-                              (person['name'] as String).isNotEmpty
-                                  ? (person['name'] as String)[0].toUpperCase()
-                                  : '?',
-                            ),
+                          leading: w.GenderAvatar(
+                            radius: 18,
+                            photoUrl: person['photo'] as String?,
+                            gender: person['gender'] as String?,
                           ),
                           title: Text(person['name'] as String),
                           subtitle: Text('${person['role']} \u{2022} ${person['code']}'),
