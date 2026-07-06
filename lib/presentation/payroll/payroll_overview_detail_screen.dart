@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart';
+import '../shared/widgets.dart' as w;
 import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
-import '../shared/widgets.dart' as w;
 import 'payroll_list_screen.dart' show selectedPayrollMonthProvider, payrollListProvider, supervisorPayrollListProvider, allSupervisorsForPayrollProvider;
 
 /// Item 8: Payroll overview detail screen \u{2014} shows all payroll records for a
@@ -161,65 +162,106 @@ class _SummaryBar extends StatelessWidget {
   }
 }
 
-class _EmpPayrollRow extends StatelessWidget {
+class _EmpPayrollRow extends ConsumerWidget {
   final PayrollModel payroll;
   const _EmpPayrollRow({required this.payroll});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.secondary200),
-      ),
-      child: Row(children: [
-        CircleAvatar(radius: 20, backgroundColor: AppColors.primary100,
-            child: Text(payroll.employeeName?.isNotEmpty == true ? payroll.employeeName![0] : 'E',
-                style: const TextStyle(color: AppColors.primary600, fontWeight: FontWeight.w700))),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(payroll.employeeName ?? 'Employee', style: const TextStyle(fontWeight: FontWeight.w600)),
-          Text('${payroll.presentDays.toStringAsFixed(0)} days \u{2022} ${DateFormat('MMM yyyy').format(DateTime(payroll.payrollYear, payroll.payrollMonth))}',
-              style: const TextStyle(fontSize: 12, color: AppColors.secondary500)),
-        ])),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(CurrencyUtils.format(payroll.netWage), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary600)),
-          w.StatusBadge(status: payroll.status),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final paymentEnabled = ref.watch(paymentModuleEnabledProvider);
+    return GestureDetector(
+      onTap: () => context.push('/payroll/${payroll.id}'),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.secondary200),
+        ),
+        child: Column(children: [
+          Row(children: [
+            w.GenderAvatar(radius: 20, photoUrl: payroll.employeePhotoUrl, gender: payroll.employeeGender),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(payroll.employeeName ?? 'Employee', style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text('${payroll.presentDays.toStringAsFixed(0)} days \u{2022} ${DateFormat('MMM yyyy').format(DateTime(payroll.payrollYear, payroll.payrollMonth))}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.secondary500)),
+            ])),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(CurrencyUtils.format(payroll.netWage), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary600)),
+              w.StatusBadge(status: payroll.status),
+            ]),
+          ]),
+          if (payroll.status == 'processed' && paymentEnabled) ...[
+            const SizedBox(height: 10),
+            w.CashfreePayButton(
+              referenceType: 'payroll',
+              referenceId: payroll.id,
+              payeeName: payroll.employeeName ?? 'Employee',
+              amount: payroll.netWage,
+              currentPaymentStatus: payroll.paymentStatus ?? 'unpaid',
+              onMarkPaid: () async {
+                await ref.read(payrollRepositoryProvider).update(payroll.id, {
+                  'payment_status': 'paid',
+                  'payment_method': 'cash',
+                  'paid_at': DateTime.now().toIso8601String(),
+                  'status': 'paid',
+                });
+                ref.invalidate(payrollListProvider);
+              },
+            ),
+          ],
         ]),
-      ]),
+      ),
     );
   }
 }
 
-class _SupPayrollRow extends StatelessWidget {
+class _SupPayrollRow extends ConsumerWidget {
   final SupervisorPayrollModel record;
   final SupervisorModel supervisor;
   const _SupPayrollRow({required this.record, required this.supervisor});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.secondary200),
-      ),
-      child: Row(children: [
-        CircleAvatar(radius: 20, backgroundColor: AppColors.accent100,
-            child: Text(supervisor.name.isNotEmpty ? supervisor.name[0] : 'S',
-                style: const TextStyle(color: AppColors.accent600, fontWeight: FontWeight.w700))),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(supervisor.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-          Text('${DateFormat('MMM yyyy').format(DateTime(record.payrollYear, record.payrollMonth))} \u{2022} Fixed salary',
-              style: const TextStyle(fontSize: 12, color: AppColors.secondary500)),
-        ])),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(CurrencyUtils.format(record.netAmount), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary600)),
-          w.StatusBadge(status: record.status),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final paymentEnabled = ref.watch(paymentModuleEnabledProvider);
+    return GestureDetector(
+      onTap: () => context.push('/supervisors/${supervisor.id}'),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.secondary200),
+        ),
+        child: Column(children: [
+          Row(children: [
+            w.GenderAvatar(radius: 20, photoUrl: supervisor.profilePhotoUrl, gender: supervisor.gender),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(supervisor.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text('${DateFormat('MMM yyyy').format(DateTime(record.payrollYear, record.payrollMonth))} \u{2022} Fixed salary',
+                  style: const TextStyle(fontSize: 12, color: AppColors.secondary500)),
+            ])),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(CurrencyUtils.format(record.netAmount), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary600)),
+              w.StatusBadge(status: record.status),
+            ]),
+          ]),
+          if (record.status == 'processed' && paymentEnabled) ...[
+            const SizedBox(height: 10),
+            w.CashfreePayButton(
+              referenceType: 'supervisor_payroll',
+              referenceId: record.id,
+              payeeName: supervisor.name,
+              amount: record.netAmount,
+              currentPaymentStatus: record.paymentStatus ?? 'unpaid',
+              onMarkPaid: () async {
+                await ref.read(supervisorPayrollRepositoryProvider).markAsPaid(record.id);
+                ref.invalidate(supervisorPayrollListProvider);
+              },
+            ),
+          ],
         ]),
-      ]),
+      ),
     );
   }
 }
