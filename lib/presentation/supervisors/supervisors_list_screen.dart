@@ -202,27 +202,10 @@ class _SupervisorCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            CircleAvatar(
+            w.GenderAvatar(
               radius: 24,
-              backgroundColor: supervisor.profilePhotoUrl != null
-                  ? AppColors.accent100
-                  : (supervisor.gender == 'female'
-                      ? const Color(0xFFFCE4EC)
-                      : const Color(0xFFE3F2FD)),
-              backgroundImage: supervisor.profilePhotoUrl != null
-                  ? NetworkImage(supervisor.profilePhotoUrl!)
-                  : null,
-              child: supervisor.profilePhotoUrl == null
-                  ? Icon(
-                      supervisor.gender == 'female'
-                          ? Icons.face_3_rounded
-                          : Icons.face_rounded,
-                      color: supervisor.gender == 'female'
-                          ? const Color(0xFFE91E63)
-                          : const Color(0xFF1565C0),
-                      size: 26,
-                    )
-                  : null,
+              photoUrl: supervisor.profilePhotoUrl,
+              gender: supervisor.gender,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -472,27 +455,16 @@ class _SupervisorFormScreenState
                   onTap: _pickPhoto,
                   child: Stack(
                     children: [
-                      CircleAvatar(
-                        radius: 48,
-                        backgroundColor: _gender == 'female'
-                            ? const Color(0xFFFCE4EC)
-                            : const Color(0xFFE3F2FD),
-                        backgroundImage: _photoFile != null
-                            ? FileImage(_photoFile!) as ImageProvider
-                            : _existingPhotoUrl != null
-                                ? NetworkImage(_existingPhotoUrl!)
-                                : null,
-                        child: _photoFile == null && _existingPhotoUrl == null
-                            ? Icon(
-                                _gender == 'female'
-                                    ? Icons.face_3_rounded
-                                    : Icons.face_rounded,
-                                color: _gender == 'female'
-                                    ? const Color(0xFFE91E63)
-                                    : const Color(0xFF1565C0),
-                                size: 48)
-                            : null,
-                      ),
+                      _photoFile != null
+                          ? CircleAvatar(
+                              radius: 48,
+                              backgroundImage: FileImage(_photoFile!),
+                            )
+                          : w.GenderAvatar(
+                              radius: 48,
+                              photoUrl: _existingPhotoUrl,
+                              gender: _gender,
+                            ),
                       Positioned(
                         bottom: 0,
                         right: 0,
@@ -949,17 +921,11 @@ class SupervisorDetailScreen extends ConsumerWidget {
                         itemBuilder: (_, i) {
                           final e = employees[i];
                           return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: AppColors.primary100,
-                              backgroundImage: e.employeePhotoUrl != null
-                                  ? NetworkImage(e.employeePhotoUrl!)
-                                  : null,
-                              child: e.employeePhotoUrl == null
-                                  ? Text(e.name[0].toUpperCase(),
-                                      style: const TextStyle(
-                                          color: AppColors.primary600,
-                                          fontFamily: 'Inter'))
-                                  : null,
+                            leading: w.GenderAvatar(
+                              radius: 18,
+                              photoUrl: e.employeePhotoUrl,
+                              gender: e.gender,
+                            ),
                             ),
                             title: Text(e.name),
                             subtitle: Text(e.employeeCode),
