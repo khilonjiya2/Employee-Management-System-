@@ -761,7 +761,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
           Expanded(
             child: Text(
               exp.paymentConfirmedAt != null
-                  ? 'Paid on ${DateTimeUtils.formatDate(exp.paymentConfirmedAt!)}'
+                  ? 'Paid on ${DateUtils.formatDate(exp.paymentConfirmedAt!)}'
                   : exp.utrReference != null
                       ? 'Paid \u{B7} UTR: ${exp.utrReference}'
                       : 'Paid',
