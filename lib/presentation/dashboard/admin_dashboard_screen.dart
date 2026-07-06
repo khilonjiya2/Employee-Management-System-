@@ -68,11 +68,41 @@ class _NotificationBell extends ConsumerWidget {
   }
 }
 
-class AdminDashboardScreen extends ConsumerWidget {
+class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
+  dynamic _realtimeSub;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _subscribeRealtime());
+  }
+
+  void _subscribeRealtime() {
+    final client = ref.read(supabaseProvider);
+    _realtimeSub = client
+        .channel('admin_dashboard_rt')
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'payroll', callback: (_) => ref.invalidate(dashboardStatsProvider))
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'expenses', callback: (_) => ref.invalidate(dashboardStatsProvider))
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'employees', callback: (_) => ref.invalidate(dashboardStatsProvider))
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'attendance', callback: (_) => ref.invalidate(dashboardStatsProvider))
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    ref.read(supabaseProvider).removeChannel(_realtimeSub);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final stats = ref.watch(dashboardStatsProvider);
     final profile = ref.watch(currentProfileProvider).valueOrNull;
     final monthLabel = DateFormat('MMMM yyyy').format(DateTime.now());
@@ -549,6 +579,7 @@ class SupervisorDashboardScreen extends ConsumerStatefulWidget {
 class _SupervisorDashboardScreenState
     extends ConsumerState<SupervisorDashboardScreen> {
   Future<Map<String, dynamic>>? _statsFuture;
+  dynamic _realtimeSub;
 
   @override
   void didChangeDependencies() {
@@ -557,6 +588,28 @@ class _SupervisorDashboardScreenState
       ref,
       ref.read(currentProfileProvider).valueOrNull?.id,
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _subscribeRealtime());
+  }
+
+  void _subscribeRealtime() {
+    final client = ref.read(supabaseProvider);
+    _realtimeSub = client
+        .channel('sup_dashboard_rt')
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'attendance', callback: (_) => _refresh())
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'expenses', callback: (_) => _refresh())
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'supervisor_wallet', callback: (_) => _refresh())
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    ref.read(supabaseProvider).removeChannel(_realtimeSub);
+    super.dispose();
   }
 
   Future<void> _refresh() async {
@@ -1060,13 +1113,13 @@ class _SupervisorResetPasswordSheetState extends State<_SupervisorResetPasswordS
       // Get only assigned employees
       final rows = await client
           .from('supervisor_employees')
-          .select('employees(id, name, employee_code, profile_id)')
+          .select('employees(id, name, employee_code, profile_id, gender, employee_photo_url)')
           .eq('supervisor_id', sup['id']);
       final emps = <Map<String, dynamic>>[];
       for (final row in rows as List) {
         final emp = row['employees'] as Map<String, dynamic>?;
         if (emp != null && emp['profile_id'] != null) {
-          emps.add({'profile_id': emp['profile_id'], 'name': emp['name'], 'code': emp['employee_code'], 'role': 'Employee'});
+          emps.add({'profile_id': emp['profile_id'], 'name': emp['name'], 'code': emp['employee_code'], 'role': 'Employee', 'gender': emp['gender'], 'photo': emp['employee_photo_url']});
         }
       }
       emps.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
@@ -1173,8 +1226,11 @@ class _SupervisorResetPasswordSheetState extends State<_SupervisorResetPasswordS
                 itemBuilder: (_, i) {
                   final p = _filtered[i];
                   return ListTile(
-                    leading: CircleAvatar(backgroundColor: AppColors.primary100,
-                        child: Text((p['name'] as String)[0].toUpperCase())),
+                    leading: w.GenderAvatar(
+                      radius: 18,
+                      photoUrl: p['photo'] as String?,
+                      gender: p['gender'] as String?,
+                    ),
                     title: Text(p['name'] as String),
                     subtitle: Text('Employee \u{2022} ${p['code']}'),
                     trailing: const Icon(Icons.lock_reset_rounded, size: 20),
