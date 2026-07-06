@@ -343,20 +343,10 @@ class _AttendanceReportState extends ConsumerState<_AttendanceReport> {
                               ),
                               child: Row(
                                 children: [
-                                  CircleAvatar(
+                                  w.GenderAvatar(
                                     radius: 18,
-                                    backgroundColor: AppColors.primary100,
-                                    child: Text(
-                                      (e['name'] as String).isNotEmpty
-                                          ? (e['name'] as String)[0]
-                                              .toUpperCase()
-                                          : '?',
-                                      style: const TextStyle(
-                                          color: AppColors.primary600,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
-                                          fontFamily: 'Inter'),
-                                    ),
+                                    photoUrl: e['employee_photo_url'] as String?,
+                                    gender: e['gender'] as String?,
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
