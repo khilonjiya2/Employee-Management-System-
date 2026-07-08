@@ -192,7 +192,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                         radius: 28,
                         photoUrl: profile?.profilePhotoUrl,
                         gender: profile?.gender,
-                        isAdmin: true,
+                        isAdmin: profile?.gender == null,
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -581,20 +581,25 @@ class _SupervisorDashboardScreenState
     extends ConsumerState<SupervisorDashboardScreen> {
   Future<Map<String, dynamic>>? _statsFuture;
   dynamic _realtimeSub;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _statsFuture ??= _loadSupervisorStats(
-      ref,
-      ref.read(currentProfileProvider).valueOrNull?.id,
-    );
-  }
+  String? _loadedForProfileId;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _subscribeRealtime());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _subscribeRealtime();
+      _tryLoadStats();
+    });
+  }
+
+  void _tryLoadStats() {
+    final profileId = ref.read(currentProfileProvider).valueOrNull?.id;
+    if (profileId != null && _loadedForProfileId != profileId) {
+      _loadedForProfileId = profileId;
+      setState(() {
+        _statsFuture = _loadSupervisorStats(ref, profileId);
+      });
+    }
   }
 
   void _subscribeRealtime() {
@@ -614,14 +619,11 @@ class _SupervisorDashboardScreenState
   }
 
   Future<void> _refresh() async {
-    final future = _loadSupervisorStats(
-      ref,
-      ref.read(currentProfileProvider).valueOrNull?.id,
-    );
+    final profileId = ref.read(currentProfileProvider).valueOrNull?.id;
+    if (profileId == null) return;
+    final future = _loadSupervisorStats(ref, profileId);
     setState(() => _statsFuture = future);
     ref.invalidate(_unreadNotificationCountProvider);
-    // Await so RefreshIndicator's spinner stays until data actually arrives
-    // (real-time/refresh fix for bug #4, supervisor side).
     await future;
   }
 
@@ -629,6 +631,19 @@ class _SupervisorDashboardScreenState
   Widget build(BuildContext context) {
     final profile = ref.watch(currentProfileProvider).valueOrNull;
     final monthLabel = DateFormat('MMMM yyyy').format(DateTime.now());
+
+    // Load stats as soon as profile becomes available
+    if (profile != null && _loadedForProfileId != profile.id) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _tryLoadStats());
+    }
+
+    // Show loading if profile or stats not yet available
+    if (profile == null || _statsFuture == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF5F6FA),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
