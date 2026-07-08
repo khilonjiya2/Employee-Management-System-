@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart' as AppUtils;
 import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../shared/widgets.dart' show GenderAvatar;
 
 // ── Providers ──────────────────────────────────────────────────────────────
 
@@ -161,27 +162,10 @@ class _SupervisorWalletTile extends ConsumerWidget {
         ),
         child: Row(children: [
           // Avatar
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFBBF24), Color(0xFFF59E0B)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              supervisor.name[0].toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-                fontFamily: 'Inter',
-              ),
-            ),
+          GenderAvatar(
+            radius: 24,
+            photoUrl: supervisor.profilePhotoUrl,
+            gender: supervisor.gender,
           ),
           const SizedBox(width: 14),
           // Info
