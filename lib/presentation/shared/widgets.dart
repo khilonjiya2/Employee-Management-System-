@@ -1684,8 +1684,8 @@ class GenderAvatar extends StatelessWidget {
   final double radius;
   final String? photoUrl;
   final String? gender;
-  final String? name; // fallback initial if gender is null
-  final bool isAdmin; // shows admin icon instead of gender icon
+  final String? name;
+  final bool isAdmin;
 
   const GenderAvatar({
     super.key,
@@ -1698,47 +1698,169 @@ class GenderAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Photo takes priority always
     if (photoUrl != null && photoUrl!.isNotEmpty) {
       return CircleAvatar(
         radius: radius,
         backgroundImage: NetworkImage(photoUrl!),
-      );
-    }
-
-    if (isAdmin) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundColor: Colors.white24,
-        child: Icon(Icons.admin_panel_settings_rounded,
-            color: Colors.white, size: radius * 0.95),
+        backgroundColor: AppColors.secondary200,
       );
     }
 
     final isFemale = gender == 'female';
     final isOther = gender == 'other';
-    final Color bg;
-    final Color iconColor;
-    final IconData icon;
 
-    if (isFemale) {
-      bg = const Color(0xFFFCE4EC);
-      iconColor = const Color(0xFFE91E63);
-      icon = Icons.face_3_rounded;
-    } else if (isOther) {
-      bg = const Color(0xFFF3E5F5);
-      iconColor = const Color(0xFF7B1FA2);
-      icon = Icons.face_rounded;
-    } else {
-      // male
-      bg = const Color(0xFFE8EAF6);
-      iconColor = const Color(0xFF283593);
-      icon = Icons.face_6_rounded; // more masculine face icon
+    // Admin with no gender and no photo
+    if (isAdmin && gender == null) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: AppColors.primary700,
+        child: Icon(Icons.manage_accounts_rounded,
+            color: Colors.white, size: radius * 1.0),
+      );
     }
 
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: bg,
-      child: Icon(icon, color: iconColor, size: radius * 1.05),
+    if (isFemale) {
+      return _CorporateFemaleAvatar(radius: radius);
+    } else if (isOther) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: const Color(0xFFEDE7F6),
+        child: Icon(Icons.person_rounded,
+            color: const Color(0xFF5E35B1), size: radius * 1.1),
+      );
+    } else {
+      // male or no gender
+      return _CorporateMaleAvatar(radius: radius);
+    }
+  }
+}
+
+class _CorporateMaleAvatar extends StatelessWidget {
+  final double radius;
+  const _CorporateMaleAvatar({required this.radius});
+
+  @override
+  Widget build(BuildContext context) {
+    final size = radius * 2;
+    return Container(
+      width: size,
+      height: size,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [Color(0xFF1565C0), Color(0xFF1E88E5)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: CustomPaint(
+        painter: _MaleAvatarPainter(),
+      ),
     );
   }
+}
+
+class _CorporateFemaleAvatar extends StatelessWidget {
+  final double radius;
+  const _CorporateFemaleAvatar({required this.radius});
+
+  @override
+  Widget build(BuildContext context) {
+    final size = radius * 2;
+    return Container(
+      width: size,
+      height: size,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [Color(0xFFC2185B), Color(0xFFE91E63)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: CustomPaint(
+        painter: _FemaleAvatarPainter(),
+      ),
+    );
+  }
+}
+
+class _MaleAvatarPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.white;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width / 2;
+
+    // Head
+    canvas.drawCircle(Offset(cx, cy * 0.72), r * 0.30, paint);
+
+    // Body (suit shape)
+    final bodyPaint = Paint()..color = Colors.white;
+    final bodyPath = Path();
+    // shoulders + torso
+    bodyPath.moveTo(cx - r * 0.45, r * 1.85);
+    bodyPath.quadraticBezierTo(cx - r * 0.42, cy * 1.28, cx - r * 0.28, cy * 1.18);
+    bodyPath.lineTo(cx, cy * 1.10);
+    bodyPath.lineTo(cx + r * 0.28, cy * 1.18);
+    bodyPath.quadraticBezierTo(cx + r * 0.42, cy * 1.28, cx + r * 0.45, r * 1.85);
+    bodyPath.close();
+    canvas.drawPath(bodyPath, bodyPaint);
+
+    // Tie
+    final tiePaint = Paint()..color = Colors.white70;
+    final tiePath = Path();
+    tiePath.moveTo(cx - r * 0.06, cy * 1.12);
+    tiePath.lineTo(cx + r * 0.06, cy * 1.12);
+    tiePath.lineTo(cx + r * 0.04, cy * 1.40);
+    tiePath.lineTo(cx, cy * 1.50);
+    tiePath.lineTo(cx - r * 0.04, cy * 1.40);
+    tiePath.close();
+    canvas.drawPath(tiePath, tiePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _FemaleAvatarPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.white;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width / 2;
+
+    // Head
+    canvas.drawCircle(Offset(cx, cy * 0.72), r * 0.30, paint);
+
+    // Hair (simple arc on top)
+    final hairPaint = Paint()..color = Colors.white60;
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(cx, cy * 0.72), radius: r * 0.33),
+      3.14, 3.14, true, hairPaint,
+    );
+
+    // Body (blouse/professional top)
+    final bodyPath = Path();
+    bodyPath.moveTo(cx - r * 0.45, r * 1.85);
+    bodyPath.quadraticBezierTo(cx - r * 0.40, cy * 1.25, cx - r * 0.25, cy * 1.15);
+    bodyPath.quadraticBezierTo(cx, cy * 1.08, cx + r * 0.25, cy * 1.15);
+    bodyPath.quadraticBezierTo(cx + r * 0.40, cy * 1.25, cx + r * 0.45, r * 1.85);
+    bodyPath.close();
+    canvas.drawPath(bodyPath, paint);
+
+    // Collar detail
+    final collarPaint = Paint()..color = Colors.white70;
+    final collarPath = Path();
+    collarPath.moveTo(cx - r * 0.12, cy * 1.12);
+    collarPath.lineTo(cx, cy * 1.22);
+    collarPath.lineTo(cx + r * 0.12, cy * 1.12);
+    canvas.drawPath(collarPath, collarPaint..style = PaintingStyle.stroke..strokeWidth = 1.5);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
