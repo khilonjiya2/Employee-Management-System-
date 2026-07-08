@@ -816,7 +816,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
       if (!approve) {
         final result = await showDialog<String>(
           context: context,
-          builder: (_) => AlertDialog(
+          builder: (dialogCtx) => AlertDialog(
             title: const Text('Rejection Reason'),
             content: TextField(
               controller: remarksController,
@@ -824,9 +824,9 @@ class ExpenseDetailScreen extends ConsumerWidget {
               maxLines: 3,
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
               FilledButton(
-                onPressed: () => Navigator.pop(context, remarksController.text.trim()),
+                onPressed: () => Navigator.pop(dialogCtx, remarksController.text.trim()),
                 style: FilledButton.styleFrom(backgroundColor: AppColors.error500),
                 child: const Text('Reject'),
               ),
