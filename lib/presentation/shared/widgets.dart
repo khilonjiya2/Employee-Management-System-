@@ -1677,7 +1677,15 @@ class CashfreePayButton extends ConsumerWidget {
 }
 // =============================================================================
 // GENDER AVATAR — shows uploaded photo if present, otherwise a polished
-// gender-based avatar. See _GenderAvatarImpl below for full details.
+// gender-based illustrated-portrait avatar rendered from a bundled asset
+// image (assets/images/avatar_male.png / avatar_female.png /
+// avatar_neutral.png), NOT a hand-drawn vector face. Earlier versions of
+// this widget painted the face procedurally, which is what produced the
+// pale, featureless "ghost" look reported in the app; using real portrait
+// art fixes that at every size, from a 16px list icon to a full-size
+// profile header, and always fills the circular slot edge-to-edge
+// (BoxFit.cover inside a ClipOval sized to exactly radius*2) so it never
+// looks squashed or off-center inside the circle.
 // =============================================================================
 
 // Rule (applies uniformly across the whole app):
@@ -1711,11 +1719,11 @@ class GenderAvatar extends StatelessWidget {
   Widget _fallbackAvatar() {
     switch (gender) {
       case 'female':
-        return _CorporateFemaleAvatar(radius: radius);
+        return _IllustratedAvatar(radius: radius, asset: _IllustratedAvatar.female);
       case 'other':
-        return _CorporateNeutralAvatar(radius: radius);
+        return _IllustratedAvatar(radius: radius, asset: _IllustratedAvatar.neutral);
       case 'male':
-        return _CorporateMaleAvatar(radius: radius);
+        return _IllustratedAvatar(radius: radius, asset: _IllustratedAvatar.male);
       default:
         // No gender on file. Admins get a dedicated badge; everyone else
         // gets their initials rather than a guessed-at gender avatar.
@@ -1853,44 +1861,55 @@ class _AvatarShell extends StatelessWidget {
 // gradient chip.
 const _avatarBackground = Color(0xFFDCE3F0);
 
-class _CorporateMaleAvatar extends StatelessWidget {
+/// Gender-based fallback avatar, rendered from a bundled illustrated-portrait
+/// asset (not a hand-drawn vector face) so it reliably reads as a real
+/// avatar rather than a pale, featureless "ghost" at small list-row sizes.
+/// The asset is drawn with BoxFit.cover inside a ClipOval sized to exactly
+/// `radius * 2`, so it always fully fills the circular slot with no
+/// letterboxing regardless of where it's placed (list rows, dashboard
+/// headers, detail screens, etc).
+class _IllustratedAvatar extends StatelessWidget {
+  static const female = 'assets/images/avatar_female.png';
+  static const male = 'assets/images/avatar_male.png';
+  static const neutral = 'assets/images/avatar_neutral.png';
+
   final double radius;
-  const _CorporateMaleAvatar({required this.radius});
+  final String asset;
+  const _IllustratedAvatar({required this.radius, required this.asset});
 
   @override
   Widget build(BuildContext context) {
-    return _AvatarShell(
-      radius: radius,
-      backgroundColor: _avatarBackground,
-      painter: _PersonAvatarPainter(style: _AvatarHairStyle.shortMale),
-    );
-  }
-}
-
-class _CorporateFemaleAvatar extends StatelessWidget {
-  final double radius;
-  const _CorporateFemaleAvatar({required this.radius});
-
-  @override
-  Widget build(BuildContext context) {
-    return _AvatarShell(
-      radius: radius,
-      backgroundColor: _avatarBackground,
-      painter: _PersonAvatarPainter(style: _AvatarHairStyle.longFemale),
-    );
-  }
-}
-
-class _CorporateNeutralAvatar extends StatelessWidget {
-  final double radius;
-  const _CorporateNeutralAvatar({required this.radius});
-
-  @override
-  Widget build(BuildContext context) {
-    return _AvatarShell(
-      radius: radius,
-      backgroundColor: _avatarBackground,
-      painter: _PersonAvatarPainter(style: _AvatarHairStyle.neutral),
+    final size = radius * 2;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: size * 0.10,
+            offset: Offset(0, size * 0.02),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: Image.asset(
+          asset,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          // Bundled assets should never fail to load, but if the asset is
+          // ever missing (e.g. a stripped release build), fall back to a
+          // plain flat circle with a person glyph instead of a red error box.
+          errorBuilder: (context, error, stack) => Container(
+            width: size,
+            height: size,
+            color: _avatarBackground,
+            child: Icon(Icons.person_rounded, size: size * 0.55, color: const Color(0xFF64748B)),
+          ),
+        ),
+      ),
     );
   }
 }
