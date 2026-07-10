@@ -1,17 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class SplashScreen extends StatefulWidget {
+import '../../data/repositories/auth_repository.dart';
+
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   bool _loading = true;
   String? _error;
 
@@ -37,9 +40,32 @@ class _SplashScreenState extends State<SplashScreen> {
 
       if (session == null) {
         context.go('/login');
-      } else {
-        context.go('/dashboard');
+        return;
       }
+
+      // IMPORTANT — this is the fix for the "dashboard breaks on cold
+      // start, works after a restart" bug: previously we routed to
+      // /dashboard as soon as `currentSession` was non-null, without
+      // waiting for the user's profile row to actually load.
+      // `currentProfileProvider` runs exactly once and caches its result;
+      // on a fresh launch, `client.auth.currentUser` can still be mid
+      // hydration and the profile fetch can still be in flight. Sending
+      // the router into /dashboard at that moment means every screen
+      // downstream (MainShell, DashboardRouterWidget, the dashboards
+      // themselves) reads a not-yet-ready profile and falls back to
+      // undefined/mismatched role branches — which is what produced the
+      // wrong bottom-nav + crash you were seeing. By awaiting the profile
+      // here, /dashboard is only entered once real data is ready.
+      try {
+        await ref.read(currentProfileProvider.future);
+      } catch (_) {
+        // If profile loading itself fails, still proceed to /dashboard —
+        // DashboardRouterWidget has its own error UI for that case. We
+        // only needed to wait for it to settle, not to succeed.
+      }
+
+      if (!mounted) return;
+      context.go('/dashboard');
     } catch (e) {
       if (!mounted) return;
 
