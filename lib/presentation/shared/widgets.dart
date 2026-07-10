@@ -1682,11 +1682,15 @@ class CashfreePayButton extends ConsumerWidget {
 
 // Rule (applies uniformly across the whole app):
 //   1) If a photo has been uploaded -> ALWAYS show the photo.
-//   2) Otherwise -> show a gender-based avatar (male / female / other / admin).
+//   2) Otherwise, if a gender is on file -> show a male/female/other
+//      illustrated avatar.
+//   3) Otherwise (no gender on file) -> show the person's initials instead
+//      of guessing a gender. Admins with no gender on file keep the
+//      dedicated admin badge.
 //
 // The photo path is also crash-proof: a broken/expired/offline image URL
-// will gracefully fall back to the gender avatar instead of showing a
-// broken-image glyph or throwing.
+// will gracefully fall back to the gender/initials avatar instead of
+// showing a broken-image glyph or throwing.
 // gender: 'male' | 'female' | 'other' | null
 class GenderAvatar extends StatelessWidget {
   final double radius;
@@ -1705,21 +1709,20 @@ class GenderAvatar extends StatelessWidget {
   });
 
   Widget _fallbackAvatar() {
-    final isFemale = gender == 'female';
-    final isOther = gender == 'other';
-
-    // Admin with no gender on file gets a dedicated admin badge.
-    if (isAdmin && gender == null) {
-      return _CorporateBadgeAvatar(radius: radius);
-    }
-
-    if (isFemale) {
-      return _CorporateFemaleAvatar(radius: radius);
-    } else if (isOther) {
-      return _CorporateNeutralAvatar(radius: radius);
-    } else {
-      // male or gender not set
-      return _CorporateMaleAvatar(radius: radius);
+    switch (gender) {
+      case 'female':
+        return _CorporateFemaleAvatar(radius: radius);
+      case 'other':
+        return _CorporateNeutralAvatar(radius: radius);
+      case 'male':
+        return _CorporateMaleAvatar(radius: radius);
+      default:
+        // No gender on file. Admins get a dedicated badge; everyone else
+        // gets their initials rather than a guessed-at gender avatar.
+        if (isAdmin) {
+          return _CorporateBadgeAvatar(radius: radius);
+        }
+        return _InitialsAvatar(radius: radius, name: name);
     }
   }
 
@@ -1804,16 +1807,17 @@ class _ResilientPhotoAvatar extends StatelessWidget {
   }
 }
 
-/// Shared premium "chip" ring + soft shadow wrapper so every generated
-/// avatar (male/female/neutral/admin) has a consistent, polished look.
+/// Shared flat pale-circle wrapper so every generated avatar
+/// (male/female/neutral/admin) matches the soft, flat illustrated-portrait
+/// style used elsewhere in the product, instead of a shiny gradient chip.
 class _AvatarShell extends StatelessWidget {
   final double radius;
-  final List<Color> gradientColors;
+  final Color backgroundColor;
   final CustomPainter painter;
 
   const _AvatarShell({
     required this.radius,
-    required this.gradientColors,
+    required this.backgroundColor,
     required this.painter,
   });
 
@@ -1825,22 +1829,14 @@ class _AvatarShell extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: gradientColors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: backgroundColor,
         boxShadow: [
           BoxShadow(
-            color: gradientColors.last.withOpacity(0.35),
-            blurRadius: size * 0.14,
-            offset: Offset(0, size * 0.035),
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: size * 0.10,
+            offset: Offset(0, size * 0.02),
           ),
         ],
-        border: Border.all(
-          color: Colors.white.withOpacity(0.35),
-          width: size * 0.015,
-        ),
       ),
       child: ClipOval(
         child: CustomPaint(
@@ -1852,6 +1848,11 @@ class _AvatarShell extends StatelessWidget {
   }
 }
 
+// Soft, muted backdrop used behind every illustrated portrait — matches the
+// pale blue-grey circle in the reference avatar art rather than a bright
+// gradient chip.
+const _avatarBackground = Color(0xFFDCE3F0);
+
 class _CorporateMaleAvatar extends StatelessWidget {
   final double radius;
   const _CorporateMaleAvatar({required this.radius});
@@ -1860,7 +1861,7 @@ class _CorporateMaleAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     return _AvatarShell(
       radius: radius,
-      gradientColors: const [Color(0xFF2563EB), Color(0xFF60A5FA)],
+      backgroundColor: _avatarBackground,
       painter: _PersonAvatarPainter(style: _AvatarHairStyle.shortMale),
     );
   }
@@ -1874,7 +1875,7 @@ class _CorporateFemaleAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     return _AvatarShell(
       radius: radius,
-      gradientColors: const [Color(0xFFDB2777), Color(0xFFF472B6)],
+      backgroundColor: _avatarBackground,
       painter: _PersonAvatarPainter(style: _AvatarHairStyle.longFemale),
     );
   }
@@ -1888,7 +1889,7 @@ class _CorporateNeutralAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     return _AvatarShell(
       radius: radius,
-      gradientColors: const [Color(0xFF7C3AED), Color(0xFFA78BFA)],
+      backgroundColor: _avatarBackground,
       painter: _PersonAvatarPainter(style: _AvatarHairStyle.neutral),
     );
   }
@@ -1902,8 +1903,74 @@ class _CorporateBadgeAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     return _AvatarShell(
       radius: radius,
-      gradientColors: const [Color(0xFF0F172A), Color(0xFF334155)],
+      backgroundColor: const Color(0xFF334155),
       painter: _PersonAvatarPainter(style: _AvatarHairStyle.admin),
+    );
+  }
+}
+
+/// Shown when no gender is on file (and the person isn't an admin): the
+/// person's initials on a deterministic, pleasant flat colour — never a
+/// guessed-at male/female illustration.
+class _InitialsAvatar extends StatelessWidget {
+  final double radius;
+  final String? name;
+
+  const _InitialsAvatar({required this.radius, this.name});
+
+  static const _palette = [
+    Color(0xFF2563EB),
+    Color(0xFF7C3AED),
+    Color(0xFF0EA5A4),
+    Color(0xFFDB2777),
+    Color(0xFFEA580C),
+    Color(0xFF16A34A),
+    Color(0xFF4F46E5),
+    Color(0xFF0891B2),
+  ];
+
+  String _initials(String n) {
+    final parts = n.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) {
+      return parts.first.substring(0, parts.first.length >= 2 ? 2 : 1).toUpperCase();
+    }
+    return (parts.first[0] + parts.last[0]).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = radius * 2;
+    final trimmed = name?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      // No name available either — fall back to a plain person glyph
+      // rather than showing empty/blank initials.
+      return Container(
+        width: size,
+        height: size,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: _avatarBackground,
+        ),
+        child: Icon(Icons.person_rounded, size: size * 0.55, color: const Color(0xFF64748B)),
+      );
+    }
+    final color = _palette[trimmed.toLowerCase().codeUnits.fold<int>(0, (a, b) => a + b) % _palette.length];
+    final initials = _initials(trimmed);
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontFamily: 'Inter',
+          fontSize: size * 0.36,
+        ),
+      ),
     );
   }
 }
@@ -1924,19 +1991,38 @@ class _PersonAvatarPainter extends CustomPainter {
     final cy = size.height / 2;
     final r = size.width / 2;
 
-    // Clothing (shoulders/body/tie) stays crisp white so it reads clearly
-    // against the coloured gradient background.
+    // Clothing colour follows the reference art: a muted plum top for the
+    // female avatar, a deep teal-blue crew neck for the male avatar, and a
+    // soft slate for the neutral avatar — all fully opaque.
+    final Color clothingColor;
+    switch (style) {
+      case _AvatarHairStyle.longFemale:
+        clothingColor = const Color(0xFF7C6389);
+        break;
+      case _AvatarHairStyle.shortMale:
+        clothingColor = const Color(0xFF35617D);
+        break;
+      case _AvatarHairStyle.neutral:
+        clothingColor = const Color(0xFF5B6B7C);
+        break;
+      case _AvatarHairStyle.admin:
+        clothingColor = const Color(0xFFE2E8F0);
+        break;
+    }
     final clothing = Paint()
-      ..color = Colors.white
+      ..color = clothingColor
       ..isAntiAlias = true;
     // The face itself uses a warm, neutral skin tone rather than flat white
     // so it reads as an actual illustrated face (with features) instead of
     // a plain pale oval/"egg".
     final faceSkin = Paint()
-      ..color = const Color(0xFFFFDCB8)
+      ..color = const Color(0xFFF2C29B)
       ..isAntiAlias = true;
+    // Hair is a solid, fully-opaque dark navy — previously this was a
+    // near-white translucent fill, which is what made every avatar read as
+    // a pale, featureless "ghost" instead of a proper illustrated portrait.
     final hairDark = Paint()
-      ..color = Colors.white.withOpacity(0.88)
+      ..color = const Color(0xFF2B2A3D)
       ..isAntiAlias = true;
     // Warm brown used for brows/eyes/mouth so the face reads as friendly and
     // human rather than a blank shape.
@@ -2034,7 +2120,7 @@ class _PersonAvatarPainter extends CustomPainter {
         ..lineTo(cx, cy + r * 0.44)
         ..lineTo(cx - r * 0.035, cy + r * 0.34)
         ..close();
-      canvas.drawPath(tie, Paint()..color = Colors.white.withOpacity(0.65));
+      canvas.drawPath(tie, Paint()..color = const Color(0xFF334155).withOpacity(0.85));
     }
 
     // ---- Head ----
