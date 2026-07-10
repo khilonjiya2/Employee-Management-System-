@@ -5,12 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/network/connectivity_service.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'data/datasources/local/local_database.dart';
+import 'data/repositories/auth_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -122,12 +124,12 @@ class AppRoot extends ConsumerWidget {
 /// throws while building, anywhere in the app. Prevents the default
 /// bare/blank grey box (Flutter's release-mode default) that users were
 /// seeing as a "crash" or "blank screen" right after logging in.
-class _InlineErrorScreen extends StatelessWidget {
+class _InlineErrorScreen extends ConsumerWidget {
   final String error;
   const _InlineErrorScreen({required this.error});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Material(
       color: const Color(0xFFF5F6FA),
       child: Center(
@@ -151,6 +153,20 @@ class _InlineErrorScreen extends StatelessWidget {
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 11, color: Colors.black54),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Reload'),
+                onPressed: () {
+                  // Re-fetch the profile instead of leaving the stale/failed
+                  // state cached, then send the user back through the
+                  // splash flow so the dashboard is rebuilt with fresh,
+                  // fully-resolved data. This replaces the old "force close
+                  // and reopen the app" workaround with an in-app fix.
+                  ref.invalidate(currentProfileProvider);
+                  GoRouter.of(context).go('/splash');
+                },
               ),
             ],
           ),
