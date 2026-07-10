@@ -23,7 +23,7 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<ExpenseModel>>> {
   final ExpenseRepository _repo;
   final dynamic _client;
   final ProfileModel? _profile;
-  dynamic _realtimeSub;
+  RealtimeChannel? _realtimeSub;
 
   ExpensesNotifier(this._repo, this._client, this._profile) : super(const AsyncLoading()) {
     load();
@@ -44,7 +44,12 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<ExpenseModel>>> {
 
   @override
   void dispose() {
-    _client.removeChannel(_realtimeSub);
+    // Guard against a channel that never finished subscribing / was already
+    // torn down — passing null into removeChannel() throws.
+    final sub = _realtimeSub;
+    if (sub != null) {
+      _client.removeChannel(sub);
+    }
     super.dispose();
   }
 
