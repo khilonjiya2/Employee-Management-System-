@@ -80,11 +80,13 @@ Future<void> main() async {
     await localDb.init();
 
     runApp(
-      ProviderScope(
-        overrides: [
-          localDatabaseProvider.overrideWithValue(localDb),
-        ],
-        child: const AppRoot(),
+      RestartWidget(
+        child: ProviderScope(
+          overrides: [
+            localDatabaseProvider.overrideWithValue(localDb),
+          ],
+          child: const AppRoot(),
+        ),
       ),
     );
   } catch (e, stackTrace) {
@@ -97,6 +99,42 @@ Future<void> main() async {
         home: FatalStartupErrorScreen(error: e.toString()),
       ),
     );
+  }
+}
+
+/// Rebuilds everything below it — including a brand-new ProviderScope, so
+/// every Riverpod provider (currentProfileProvider, the router, dashboard
+/// stats, all of it) is torn down and recreated from scratch — when
+/// [restartApp] is called. This is a genuine equivalent of force-closing
+/// and reopening the app, done in-app in milliseconds, instead of trying
+/// to guess which one or two providers need `ref.invalidate`-ing to
+/// recover from an unexpected error. The persisted Supabase session is
+/// still on disk, so the fresh pass through SplashScreen picks it back up
+/// exactly like a real cold start would.
+class RestartWidget extends StatefulWidget {
+  final Widget child;
+  const RestartWidget({super.key, required this.child});
+
+  static void restartApp(BuildContext context) {
+    context.findAncestorStateOfType<_RestartWidgetState>()?._restart();
+  }
+
+  @override
+  State<RestartWidget> createState() => _RestartWidgetState();
+}
+
+class _RestartWidgetState extends State<RestartWidget> {
+  Key _key = UniqueKey();
+
+  void _restart() {
+    setState(() {
+      _key = UniqueKey();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyedSubtree(key: _key, child: widget.child);
   }
 }
 
@@ -124,12 +162,12 @@ class AppRoot extends ConsumerWidget {
 /// throws while building, anywhere in the app. Prevents the default
 /// bare/blank grey box (Flutter's release-mode default) that users were
 /// seeing as a "crash" or "blank screen" right after logging in.
-class _InlineErrorScreen extends ConsumerWidget {
+class _InlineErrorScreen extends StatelessWidget {
   final String error;
   const _InlineErrorScreen({required this.error});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Material(
       color: const Color(0xFFF5F6FA),
       child: Center(
@@ -159,13 +197,12 @@ class _InlineErrorScreen extends ConsumerWidget {
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: const Text('Reload'),
                 onPressed: () {
-                  // Re-fetch the profile instead of leaving the stale/failed
-                  // state cached, then send the user back through the
-                  // splash flow so the dashboard is rebuilt with fresh,
-                  // fully-resolved data. This replaces the old "force close
-                  // and reopen the app" workaround with an in-app fix.
-                  ref.invalidate(currentProfileProvider);
-                  GoRouter.of(context).go('/splash');
+                  // A full in-app restart (see RestartWidget above) — the
+                  // same as force-closing and reopening the app, but
+                  // instant and without leaving the screen. Replaces the
+                  // old approach of invalidating a single provider, which
+                  // could still leave other stale state behind.
+                  RestartWidget.restartApp(context);
                 },
               ),
             ],
