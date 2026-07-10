@@ -15,10 +15,21 @@ import 'data/datasources/local/local_database.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // NOTE: ErrorWidget.builder below fixes the "blank screen on first
+  // login" class of bugs — without it, any error thrown while a widget is
+  // building (missing linked record on a freshly-created account, a null
+  // profile field, a transient network hiccup right after login, etc.)
+  // renders as a bare grey screen in release builds. Now it shows a
+  // friendly, recoverable screen everywhere in the app instead.
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
     debugPrint('Flutter Error: ${details.exception}');
     debugPrintStack(stackTrace: details.stack);
+  };
+
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    debugPrint('Widget build error: ${details.exception}');
+    return _InlineErrorScreen(error: details.exceptionAsString());
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
@@ -103,6 +114,48 @@ class AppRoot extends ConsumerWidget {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.light,
       routerConfig: router,
+    );
+  }
+}
+
+/// Friendly fallback rendered by [ErrorWidget.builder] whenever a widget
+/// throws while building, anywhere in the app. Prevents the default
+/// bare/blank grey box (Flutter's release-mode default) that users were
+/// seeing as a "crash" or "blank screen" right after logging in.
+class _InlineErrorScreen extends StatelessWidget {
+  final String error;
+  const _InlineErrorScreen({required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF5F6FA),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline_rounded,
+                  size: 48, color: Colors.redAccent),
+              const SizedBox(height: 12),
+              const Text(
+                'Something went wrong loading this screen.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                error,
+                textAlign: TextAlign.center,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
