@@ -183,13 +183,27 @@ class EmployeeRepository {
   }
 
   Future<EmployeeModel?> getByProfileId(String profileId) async {
-    final data = await _client
-        .from('employees')
-        .select('*, departments(name), locations(name)')
-        .eq('profile_id', profileId)
-        .maybeSingle();
-    if (data == null) return null;
-    return EmployeeModel.fromJson(data);
+    // Mirrors the retry added to currentProfileProvider: an employee's
+    // account is created via an edge function that creates the auth user,
+    // the profiles row, and the employees row (with profile_id linking
+    // them) in quick succession. A first-login/cold-start query can land
+    // in the brief window before that link is fully committed, coming back
+    // empty and showing "No employee record linked" (or, since the
+    // dashboard's own record drives everything else it renders, an error
+    // that only clears after force-closing and reopening the app). Retry
+    // briefly before accepting a genuinely-empty result.
+    for (var attempt = 0; attempt < 4; attempt++) {
+      final data = await _client
+          .from('employees')
+          .select('*, departments(name), locations(name)')
+          .eq('profile_id', profileId)
+          .maybeSingle();
+      if (data != null) return EmployeeModel.fromJson(data);
+      if (attempt < 3) {
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+    }
+    return null;
   }
 
   Future<String?> getSupervisorIdForEmployee(String employeeId) async {
