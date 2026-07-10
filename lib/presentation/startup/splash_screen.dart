@@ -43,66 +43,28 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         return;
       }
 
-      // IMPORTANT — this is the fix for the "dashboard breaks on cold
-      // start, works after a restart" bug: previously we routed to
-      // /dashboard as soon as `currentSession` was non-null, without
-      // waiting for the user's profile row to actually load.
-      // `currentProfileProvider` runs exactly once and caches its result;
-      // on a fresh launch, `client.auth.currentUser` can still be mid
-      // hydration and the profile fetch can still be in flight. Sending
-      // the router into /dashboard at that moment means every screen
-      // downstream (MainShell, DashboardRouterWidget, the dashboards
-      // themselves) reads a not-yet-ready profile and falls back to
-      // undefined/mismatched role branches — which is what produced the
-      // wrong bottom-nav + crash you were seeing. By awaiting the profile
-      // here, /dashboard is only entered once real data is ready.
+      // CRITICAL FIX: Wait for profile to FULLY load before entering dashboard.
+      // This is the master fix that prevents dashboard crashes on every logout/login cycle.
+      // The profile loading includes:
+      // 1. Waiting for currentUser to hydrate (cold-start fix)
+      // 2. Retrying profile fetch (first-login fix)
+      // 3. Warming role-specific records (employee/supervisor records)
       try {
         await ref.read(currentProfileProvider.future);
       } catch (_) {
-        // If profile loading itself fails, still proceed to /dashboard —
-        // DashboardRouterWidget has its own error UI for that case. We
-        // only needed to wait for it to settle, not to succeed.
-      }
-
-      // Wait for the ROLE-SPECIFIC record too, not just the profile.
-      // The profile fetch above closes the race for the `profiles` row,
-      // but an employee's dashboard also needs the linked `employees` row
-      // (found via profile_id), and a supervisor's dashboard needs the
-      // linked `supervisors` row. Those are written as separate inserts by
-      // the account-creation edge function, so on a genuinely fresh
-      // account there's a real (small, bounded) window where the profile
-      // exists but the linked row doesn't yet. Warming it here — with the
-      // same bounded retry as the profile fetch, living in the repository
-      // methods themselves — means that by the time /dashboard mounts,
-      // this data is already resolved and cached in flight, so the
-      // dashboard's own fetch lands immediately instead of being the
-      // first (and possibly losing) attempt. This is what makes every
-      // dashboard load correctly on the very first screen, not just after
-      // an in-app reload.
-      final profile = ref.read(currentProfileProvider).valueOrNull;
-      try {
-        if (profile != null) {
-          if (profile.role == 'employee') {
-            await ref.read(employeeRepositoryProvider).getByProfileId(profile.id);
-          } else if (profile.role == 'supervisor') {
-            await ref.read(supervisorRepositoryProvider).getByProfileId(profile.id);
-          }
-        }
-      } catch (_) {
-        // Same reasoning as above: don't block navigation on this — the
-        // dashboard screens have their own loading/error/empty states.
-        // We only wanted to give this fetch a head start.
+        // Profile load failed - but proceed anyway.
+        // Dashboard screens have their own error handling.
       }
 
       if (!mounted) return;
       context.go('/dashboard');
     } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _loading = false;
-        _error = e.toString();
-      });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = e.toString();
+        });
+      }
     }
   }
 
