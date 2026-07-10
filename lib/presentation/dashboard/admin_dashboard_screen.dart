@@ -77,7 +77,26 @@ class AdminDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
-  dynamic _realtimeSub;
+  // NOTE: this mirrors the fix already applied to the supervisor dashboard
+  // below in this same file (see _SupervisorDashboardScreenState). This
+  // state was previously missing all three of the same protections:
+  //  1) A properly-typed nullable RealtimeChannel? instead of `dynamic` —
+  //     `dynamic` hid the fact that a still-null value was being handed to
+  //     removeChannel(), which requires a non-null RealtimeChannel and
+  //     throws (a null-check failure) when it isn't one.
+  //  2) A FIXED channel topic name ('admin_dashboard_rt'). If you log out
+  //     and back in quickly — logout → login WITHOUT a full app restart —
+  //     a new AdminDashboardScreen can mount and call channel() with the
+  //     exact same topic before the previous instance's channel has
+  //     finished being torn down server-side, which is exactly what was
+  //     producing "Null check operator used on a null value" errors when
+  //     re-entering the dashboard after logout/login. Using a
+  //     per-instance-unique topic (timestamp suffix) avoids the collision
+  //     entirely, the same way the supervisor dashboard already does.
+  //  3) No `mounted` guard in the post-frame callback, so a very fast
+  //     navigation away (e.g. immediate logout right after login) could
+  //     still run _subscribeRealtime() after the widget was disposed.
+  RealtimeChannel? _realtimeSub;
 
   @override
   void initState() {
@@ -86,9 +105,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   }
 
   void _subscribeRealtime() {
+    if (!mounted) return;
     final client = ref.read(supabaseProvider);
     _realtimeSub = client
-        .channel('admin_dashboard_rt')
+        .channel('admin_dashboard_rt_${DateTime.now().microsecondsSinceEpoch}')
         .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'payroll', callback: (_) => ref.invalidate(dashboardStatsProvider))
         .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'expenses', callback: (_) => ref.invalidate(dashboardStatsProvider))
         .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'employees', callback: (_) => ref.invalidate(dashboardStatsProvider))
@@ -98,7 +118,14 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
   @override
   void dispose() {
-    ref.read(supabaseProvider).removeChannel(_realtimeSub);
+    // Guard against removing a channel that never finished subscribing (the
+    // subscribe call above is scheduled via addPostFrameCallback, so a very
+    // fast navigation away — e.g. an immediate logout — could otherwise
+    // reach dispose() while _realtimeSub is still null).
+    final sub = _realtimeSub;
+    if (sub != null) {
+      ref.read(supabaseProvider).removeChannel(sub);
+    }
     super.dispose();
   }
 
