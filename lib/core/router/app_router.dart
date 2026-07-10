@@ -11,6 +11,7 @@ import '../../presentation/auth/force_password_change_screen.dart'
 import '../../presentation/auth/login_screen.dart';
 import '../../presentation/auth/forgot_password_screen.dart';
 import '../../presentation/auth/force_password_change_screen.dart';
+import '../../presentation/startup/splash_screen.dart';
 
 import '../../presentation/dashboard/admin_dashboard_screen.dart';
 import '../../presentation/dashboard/supervisor_dashboard_screen.dart';
@@ -65,9 +66,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     refreshListenable: refreshListenable,
-    initialLocation: '/login',
+    initialLocation: '/splash',
 
     redirect: (context, state) {
+      // THE COLD-START FIX: SplashScreen used to exist in the codebase but
+      // was never actually registered as a route, so the app booted
+      // straight into '/login' and this redirect() would send a logged-in
+      // user to '/dashboard' the instant `currentSession` went non-null —
+      // with no wait for the user's profile to actually finish loading.
+      // That race (session restored a beat before currentUser/profile
+      // hydration finished) is what produced a broken/wrong dashboard on
+      // first cold launch but a working one after restart. SplashScreen
+      // now explicitly awaits the profile before navigating anywhere, so
+      // let it own its own navigation here rather than fighting it.
+      if (state.matchedLocation == '/splash') return null;
+
       final session = ref.read(authRepositoryProvider).currentSession;
       final isLoggedIn = session != null;
 
@@ -118,6 +131,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     },
 
     routes: [
+      GoRoute(
+        name: 'splash',
+        path: '/splash',
+        builder: (_, __) => const SplashScreen(),
+      ),
       GoRoute(
         name: 'login',
         path: '/login',
