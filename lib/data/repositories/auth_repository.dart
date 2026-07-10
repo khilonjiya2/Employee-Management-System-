@@ -18,13 +18,26 @@ final currentProfileProvider = FutureProvider<ProfileModel?>((ref) async {
   final client = ref.read(supabaseProvider);
   final user = client.auth.currentUser;
   if (user == null) return null;
-  final data = await client
-      .from('profiles')
-      .select()
-      .eq('id', user.id)
-      .maybeSingle();
-  if (data == null) return null;
-  return ProfileModel.fromJson(data);
+
+  // A brand new account is created via an edge function that creates the
+  // auth user and the linked profiles row in quick succession. If a first
+  // login races that write, one immediate query can come back empty and
+  // the user sees a blank screen even though the account is valid. Retry
+  // briefly before giving up so first login is reliable.
+  for (var attempt = 0; attempt < 4; attempt++) {
+    final data = await client
+        .from('profiles')
+        .select()
+        .eq('id', user.id)
+        .maybeSingle();
+    if (data != null) {
+      return ProfileModel.fromJson(data);
+    }
+    if (attempt < 3) {
+      await Future.delayed(Duration(milliseconds: 300 * (attempt + 1)));
+    }
+  }
+  return null;
 });
 
 final currentUserRoleProvider = Provider<String>((ref) {
