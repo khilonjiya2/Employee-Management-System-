@@ -1676,10 +1676,18 @@ class CashfreePayButton extends ConsumerWidget {
   }
 }
 // =============================================================================
-// GENDER AVATAR — shows gender-based icon or photo; used across the app
-// gender: 'male' | 'female' | 'other' | null
+// GENDER AVATAR — shows uploaded photo if present, otherwise a polished
+// gender-based avatar. See _GenderAvatarImpl below for full details.
 // =============================================================================
 
+// Rule (applies uniformly across the whole app):
+//   1) If a photo has been uploaded -> ALWAYS show the photo.
+//   2) Otherwise -> show a gender-based avatar (male / female / other / admin).
+//
+// The photo path is also crash-proof: a broken/expired/offline image URL
+// will gracefully fall back to the gender avatar instead of showing a
+// broken-image glyph or throwing.
+// gender: 'male' | 'female' | 'other' | null
 class GenderAvatar extends StatelessWidget {
   final double radius;
   final String? photoUrl;
@@ -1696,43 +1704,151 @@ class GenderAvatar extends StatelessWidget {
     this.isAdmin = false,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    // Photo takes priority always
-    if (photoUrl != null && photoUrl!.isNotEmpty) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundImage: NetworkImage(photoUrl!),
-        backgroundColor: AppColors.secondary200,
-      );
-    }
-
+  Widget _fallbackAvatar() {
     final isFemale = gender == 'female';
     final isOther = gender == 'other';
 
-    // Admin with no gender and no photo
+    // Admin with no gender on file gets a dedicated admin badge.
     if (isAdmin && gender == null) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundColor: AppColors.primary700,
-        child: Icon(Icons.manage_accounts_rounded,
-            color: Colors.white, size: radius * 1.0),
-      );
+      return _CorporateBadgeAvatar(radius: radius);
     }
 
     if (isFemale) {
       return _CorporateFemaleAvatar(radius: radius);
     } else if (isOther) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundColor: const Color(0xFFEDE7F6),
-        child: Icon(Icons.person_rounded,
-            color: const Color(0xFF5E35B1), size: radius * 1.1),
-      );
+      return _CorporateNeutralAvatar(radius: radius);
     } else {
-      // male or no gender
+      // male or gender not set
       return _CorporateMaleAvatar(radius: radius);
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Photo always takes priority when present. Rendering is wrapped in a
+    // resilient loader so a broken/expired/offline URL never crashes the
+    // screen or leaves a blank/broken circle — it just falls back to the
+    // gender avatar below.
+    if (photoUrl != null && photoUrl!.trim().isNotEmpty) {
+      return _ResilientPhotoAvatar(
+        radius: radius,
+        photoUrl: photoUrl!,
+        fallbackBuilder: _fallbackAvatar,
+      );
+    }
+
+    return _fallbackAvatar();
+  }
+}
+
+/// Shows a network photo inside a circle. If the image fails to load (bad
+/// URL, deleted file, offline, timeout) it seamlessly swaps to the
+/// gender-based fallback instead of an error glyph or a crash.
+class _ResilientPhotoAvatar extends StatelessWidget {
+  final double radius;
+  final String photoUrl;
+  final Widget Function() fallbackBuilder;
+
+  const _ResilientPhotoAvatar({
+    required this.radius,
+    required this.photoUrl,
+    required this.fallbackBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = radius * 2;
+    return ClipOval(
+      child: Image.network(
+        photoUrl,
+        key: ValueKey(photoUrl),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        // Smooth fade-in once loaded instead of a jarring pop-in.
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (wasSynchronouslyLoaded) return child;
+          return AnimatedOpacity(
+            opacity: frame == null ? 0 : 1,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            child: child,
+          );
+        },
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return SizedBox(
+            width: size,
+            height: size,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                fallbackBuilder(),
+                SizedBox(
+                  width: size * 0.4,
+                  height: size * 0.4,
+                  child: const CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+        // Never let a broken/expired/offline image crash the widget tree —
+        // fall back to the gender avatar instead.
+        errorBuilder: (context, error, stack) => fallbackBuilder(),
+      ),
+    );
+  }
+}
+
+/// Shared premium "chip" ring + soft shadow wrapper so every generated
+/// avatar (male/female/neutral/admin) has a consistent, polished look.
+class _AvatarShell extends StatelessWidget {
+  final double radius;
+  final List<Color> gradientColors;
+  final CustomPainter painter;
+
+  const _AvatarShell({
+    required this.radius,
+    required this.gradientColors,
+    required this.painter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = radius * 2;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: gradientColors.last.withOpacity(0.35),
+            blurRadius: size * 0.14,
+            offset: Offset(0, size * 0.035),
+          ),
+        ],
+        border: Border.all(
+          color: Colors.white.withOpacity(0.35),
+          width: size * 0.015,
+        ),
+      ),
+      child: ClipOval(
+        child: CustomPaint(
+          size: Size(size, size),
+          painter: painter,
+        ),
+      ),
+    );
   }
 }
 
@@ -1742,21 +1858,10 @@ class _CorporateMaleAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = radius * 2;
-    return Container(
-      width: size,
-      height: size,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [Color(0xFF1565C0), Color(0xFF1E88E5)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: CustomPaint(
-        painter: _MaleAvatarPainter(),
-      ),
+    return _AvatarShell(
+      radius: radius,
+      gradientColors: const [Color(0xFF2563EB), Color(0xFF60A5FA)],
+      painter: _PersonAvatarPainter(style: _AvatarHairStyle.shortMale),
     );
   }
 }
@@ -1767,100 +1872,298 @@ class _CorporateFemaleAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = radius * 2;
-    return Container(
-      width: size,
-      height: size,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [Color(0xFFC2185B), Color(0xFFE91E63)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: CustomPaint(
-        painter: _FemaleAvatarPainter(),
-      ),
+    return _AvatarShell(
+      radius: radius,
+      gradientColors: const [Color(0xFFDB2777), Color(0xFFF472B6)],
+      painter: _PersonAvatarPainter(style: _AvatarHairStyle.longFemale),
     );
   }
 }
 
-class _MaleAvatarPainter extends CustomPainter {
+class _CorporateNeutralAvatar extends StatelessWidget {
+  final double radius;
+  const _CorporateNeutralAvatar({required this.radius});
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white;
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final r = size.width / 2;
-
-    // Head
-    canvas.drawCircle(Offset(cx, cy * 0.72), r * 0.30, paint);
-
-    // Body (suit shape)
-    final bodyPaint = Paint()..color = Colors.white;
-    final bodyPath = Path();
-    // shoulders + torso
-    bodyPath.moveTo(cx - r * 0.45, r * 1.85);
-    bodyPath.quadraticBezierTo(cx - r * 0.42, cy * 1.28, cx - r * 0.28, cy * 1.18);
-    bodyPath.lineTo(cx, cy * 1.10);
-    bodyPath.lineTo(cx + r * 0.28, cy * 1.18);
-    bodyPath.quadraticBezierTo(cx + r * 0.42, cy * 1.28, cx + r * 0.45, r * 1.85);
-    bodyPath.close();
-    canvas.drawPath(bodyPath, bodyPaint);
-
-    // Tie
-    final tiePaint = Paint()..color = Colors.white70;
-    final tiePath = Path();
-    tiePath.moveTo(cx - r * 0.06, cy * 1.12);
-    tiePath.lineTo(cx + r * 0.06, cy * 1.12);
-    tiePath.lineTo(cx + r * 0.04, cy * 1.40);
-    tiePath.lineTo(cx, cy * 1.50);
-    tiePath.lineTo(cx - r * 0.04, cy * 1.40);
-    tiePath.close();
-    canvas.drawPath(tiePath, tiePaint);
+  Widget build(BuildContext context) {
+    return _AvatarShell(
+      radius: radius,
+      gradientColors: const [Color(0xFF7C3AED), Color(0xFFA78BFA)],
+      painter: _PersonAvatarPainter(style: _AvatarHairStyle.neutral),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class _FemaleAvatarPainter extends CustomPainter {
+class _CorporateBadgeAvatar extends StatelessWidget {
+  final double radius;
+  const _CorporateBadgeAvatar({required this.radius});
+
+  @override
+  Widget build(BuildContext context) {
+    return _AvatarShell(
+      radius: radius,
+      gradientColors: const [Color(0xFF0F172A), Color(0xFF334155)],
+      painter: _PersonAvatarPainter(style: _AvatarHairStyle.admin),
+    );
+  }
+}
+
+enum _AvatarHairStyle { shortMale, longFemale, neutral, admin }
+
+/// A single, carefully-proportioned vector person silhouette used for every
+/// avatar variant. Coordinates are all expressed as fractions of the circle
+/// radius `r` around the true center `(cx, cy)`, so it scales cleanly at any
+/// size from a 16px list icon to a 60px profile header.
+class _PersonAvatarPainter extends CustomPainter {
+  final _AvatarHairStyle style;
+  _PersonAvatarPainter({required this.style});
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white;
     final cx = size.width / 2;
     final cy = size.height / 2;
     final r = size.width / 2;
 
-    // Head
-    canvas.drawCircle(Offset(cx, cy * 0.72), r * 0.30, paint);
+    final skin = Paint()
+      ..color = Colors.white
+      ..isAntiAlias = true;
+    final hairDark = Paint()
+      ..color = Colors.white.withOpacity(0.88)
+      ..isAntiAlias = true;
+    final shade = Paint()
+      ..color = Colors.black.withOpacity(0.06)
+      ..isAntiAlias = true;
 
-    // Hair (simple arc on top)
-    final hairPaint = Paint()..color = Colors.white60;
+    final headCenter = Offset(cx, cy - r * 0.18);
+    final headRadius = r * 0.32;
+
+    // ---- Long hair (female): back layer flows past the shoulders ----
+    if (style == _AvatarHairStyle.longFemale) {
+      final backHair = Path()
+        ..moveTo(cx - r * 0.50, cy + r * 0.05)
+        ..cubicTo(
+          cx - r * 0.58, cy + r * 0.30,
+          cx - r * 0.46, cy + r * 0.78,
+          cx - r * 0.30, cy + r * 0.95,
+        )
+        ..lineTo(cx - r * 0.14, cy + r * 0.95)
+        ..cubicTo(
+          cx - r * 0.24, cy + r * 0.55,
+          cx - r * 0.30, cy + r * 0.10,
+          cx - r * 0.22, cy - r * 0.12,
+        )
+        ..cubicTo(
+          cx - r * 0.10, cy - r * 0.34,
+          cx + r * 0.10, cy - r * 0.34,
+          cx + r * 0.22, cy - r * 0.12,
+        )
+        ..cubicTo(
+          cx + r * 0.30, cy + r * 0.10,
+          cx + r * 0.24, cy + r * 0.55,
+          cx + r * 0.14, cy + r * 0.95,
+        )
+        ..lineTo(cx + r * 0.30, cy + r * 0.95)
+        ..cubicTo(
+          cx + r * 0.46, cy + r * 0.78,
+          cx + r * 0.58, cy + r * 0.30,
+          cx + r * 0.50, cy + r * 0.05,
+        )
+        ..cubicTo(
+          cx + r * 0.42, cy - r * 0.42,
+          cx - r * 0.42, cy - r * 0.42,
+          cx - r * 0.50, cy + r * 0.05,
+        )
+        ..close();
+      canvas.drawPath(backHair, hairDark);
+    }
+
+    // ---- Shoulders / torso (clothing) ----
+    final bodyPath = Path();
+    switch (style) {
+      case _AvatarHairStyle.longFemale:
+        bodyPath
+          ..moveTo(cx - r * 0.46, r * 1.02)
+          ..cubicTo(cx - r * 0.44, cy + r * 0.30, cx - r * 0.30, cy + r * 0.14,
+              cx - r * 0.19, cy + r * 0.06)
+          ..cubicTo(cx - r * 0.08, cy - r * 0.02, cx + r * 0.08, cy - r * 0.02,
+              cx + r * 0.19, cy + r * 0.06)
+          ..cubicTo(cx + r * 0.30, cy + r * 0.14, cx + r * 0.44, cy + r * 0.30,
+              cx + r * 0.46, r * 1.02)
+          ..close();
+        break;
+      case _AvatarHairStyle.admin:
+        bodyPath
+          ..moveTo(cx - r * 0.48, r * 1.02)
+          ..cubicTo(cx - r * 0.46, cy + r * 0.26, cx - r * 0.30, cy + r * 0.10,
+              cx - r * 0.20, cy + r * 0.02)
+          ..lineTo(cx, cy + r * 0.16)
+          ..lineTo(cx + r * 0.20, cy + r * 0.02)
+          ..cubicTo(cx + r * 0.30, cy + r * 0.10, cx + r * 0.46, cy + r * 0.26,
+              cx + r * 0.48, r * 1.02)
+          ..close();
+        break;
+      case _AvatarHairStyle.shortMale:
+      case _AvatarHairStyle.neutral:
+        bodyPath
+          ..moveTo(cx - r * 0.47, r * 1.02)
+          ..cubicTo(cx - r * 0.45, cy + r * 0.28, cx - r * 0.28, cy + r * 0.10,
+              cx - r * 0.16, cy + r * 0.00)
+          ..lineTo(cx, cy + r * 0.14)
+          ..lineTo(cx + r * 0.16, cy + r * 0.00)
+          ..cubicTo(cx + r * 0.28, cy + r * 0.10, cx + r * 0.45, cy + r * 0.28,
+              cx + r * 0.47, r * 1.02)
+          ..close();
+        break;
+    }
+    canvas.drawPath(bodyPath, skin);
+
+    // ---- Necktie for admin (subtle authority cue) ----
+    if (style == _AvatarHairStyle.admin) {
+      final tie = Path()
+        ..moveTo(cx - r * 0.05, cy + r * 0.08)
+        ..lineTo(cx + r * 0.05, cy + r * 0.08)
+        ..lineTo(cx + r * 0.035, cy + r * 0.34)
+        ..lineTo(cx, cy + r * 0.44)
+        ..lineTo(cx - r * 0.035, cy + r * 0.34)
+        ..close();
+      canvas.drawPath(tie, Paint()..color = Colors.white.withOpacity(0.65));
+    }
+
+    // ---- Head ----
+    canvas.drawCircle(headCenter, headRadius, skin);
+    // Very soft chin shading for a touch of dimensionality.
     canvas.drawArc(
-      Rect.fromCircle(center: Offset(cx, cy * 0.72), radius: r * 0.33),
-      3.14, 3.14, true, hairPaint,
+      Rect.fromCircle(center: headCenter, radius: headRadius),
+      0.35,
+      2.4,
+      false,
+      shade..style = PaintingStyle.stroke..strokeWidth = headRadius * 0.14,
     );
 
-    // Body (blouse/professional top)
-    final bodyPath = Path();
-    bodyPath.moveTo(cx - r * 0.45, r * 1.85);
-    bodyPath.quadraticBezierTo(cx - r * 0.40, cy * 1.25, cx - r * 0.25, cy * 1.15);
-    bodyPath.quadraticBezierTo(cx, cy * 1.08, cx + r * 0.25, cy * 1.15);
-    bodyPath.quadraticBezierTo(cx + r * 0.40, cy * 1.25, cx + r * 0.45, r * 1.85);
-    bodyPath.close();
-    canvas.drawPath(bodyPath, paint);
+    // ---- Hair on top of head, per style ----
+    switch (style) {
+      case _AvatarHairStyle.shortMale:
+        final cap = Path()
+          ..moveTo(headCenter.dx - headRadius * 0.98, headCenter.dy - headRadius * 0.05)
+          ..cubicTo(
+            headCenter.dx - headRadius * 1.05, headCenter.dy - headRadius * 0.95,
+            headCenter.dx - headRadius * 0.35, headCenter.dy - headRadius * 1.35,
+            headCenter.dx, headCenter.dy - headRadius * 1.28,
+          )
+          ..cubicTo(
+            headCenter.dx + headRadius * 0.35, headCenter.dy - headRadius * 1.35,
+            headCenter.dx + headRadius * 1.05, headCenter.dy - headRadius * 0.95,
+            headCenter.dx + headRadius * 0.98, headCenter.dy - headRadius * 0.05,
+          )
+          ..cubicTo(
+            headCenter.dx + headRadius * 0.6, headCenter.dy - headRadius * 0.55,
+            headCenter.dx - headRadius * 0.6, headCenter.dy - headRadius * 0.55,
+            headCenter.dx - headRadius * 0.98, headCenter.dy - headRadius * 0.05,
+          )
+          ..close();
+        canvas.drawPath(cap, hairDark);
+        break;
+      case _AvatarHairStyle.neutral:
+        // Medium, chin-length androgynous hairstyle.
+        final cap = Path()
+          ..moveTo(headCenter.dx - headRadius * 1.05, headCenter.dy + headRadius * 0.55)
+          ..cubicTo(
+            headCenter.dx - headRadius * 1.18, headCenter.dy - headRadius * 0.25,
+            headCenter.dx - headRadius * 0.55, headCenter.dy - headRadius * 1.32,
+            headCenter.dx, headCenter.dy - headRadius * 1.25,
+          )
+          ..cubicTo(
+            headCenter.dx + headRadius * 0.55, headCenter.dy - headRadius * 1.32,
+            headCenter.dx + headRadius * 1.18, headCenter.dy - headRadius * 0.25,
+            headCenter.dx + headRadius * 1.05, headCenter.dy + headRadius * 0.55,
+          )
+          ..cubicTo(
+            headCenter.dx + headRadius * 0.85, headCenter.dy + headRadius * 0.15,
+            headCenter.dx + headRadius * 0.7, headCenter.dy - headRadius * 0.5,
+            headCenter.dx, headCenter.dy - headRadius * 0.55,
+          )
+          ..cubicTo(
+            headCenter.dx - headRadius * 0.7, headCenter.dy - headRadius * 0.5,
+            headCenter.dx - headRadius * 0.85, headCenter.dy + headRadius * 0.15,
+            headCenter.dx - headRadius * 1.05, headCenter.dy + headRadius * 0.55,
+          )
+          ..close();
+        canvas.drawPath(cap, hairDark);
+        break;
+      case _AvatarHairStyle.longFemale:
+        // Face-framing top hair with a soft side part, plus two strands
+        // that sweep down past the jaw toward the shoulders (drawn above
+        // the blouse, in front of the long back-hair layer already painted).
+        final topHair = Path()
+          ..moveTo(headCenter.dx - headRadius * 1.02, headCenter.dy + headRadius * 0.35)
+          ..cubicTo(
+            headCenter.dx - headRadius * 1.15, headCenter.dy - headRadius * 0.55,
+            headCenter.dx - headRadius * 0.5, headCenter.dy - headRadius * 1.38,
+            headCenter.dx + headRadius * 0.1, headCenter.dy - headRadius * 1.30,
+          )
+          ..cubicTo(
+            headCenter.dx + headRadius * 0.65, headCenter.dy - headRadius * 1.24,
+            headCenter.dx + headRadius * 1.12, headCenter.dy - headRadius * 0.6,
+            headCenter.dx + headRadius * 1.0, headCenter.dy + headRadius * 0.30,
+          )
+          ..cubicTo(
+            headCenter.dx + headRadius * 0.8, headCenter.dy - headRadius * 0.05,
+            headCenter.dx + headRadius * 0.6, headCenter.dy - headRadius * 0.55,
+            headCenter.dx + headRadius * 0.12, headCenter.dy - headRadius * 0.62,
+          )
+          ..cubicTo(
+            headCenter.dx - headRadius * 0.45, headCenter.dy - headRadius * 0.68,
+            headCenter.dx - headRadius * 0.78, headCenter.dy - headRadius * 0.2,
+            headCenter.dx - headRadius * 1.02, headCenter.dy + headRadius * 0.35,
+          )
+          ..close();
+        canvas.drawPath(topHair, hairDark);
 
-    // Collar detail
-    final collarPaint = Paint()..color = Colors.white70;
-    final collarPath = Path();
-    collarPath.moveTo(cx - r * 0.12, cy * 1.12);
-    collarPath.lineTo(cx, cy * 1.22);
-    collarPath.lineTo(cx + r * 0.12, cy * 1.12);
-    canvas.drawPath(collarPath, collarPaint..style = PaintingStyle.stroke..strokeWidth = 1.5);
+        // Left face-framing strand.
+        final leftStrand = Path()
+          ..moveTo(headCenter.dx - headRadius * 1.0, headCenter.dy + headRadius * 0.25)
+          ..cubicTo(
+            headCenter.dx - headRadius * 1.12, headCenter.dy + headRadius * 0.95,
+            headCenter.dx - headRadius * 0.92, cy + r * 0.62,
+            headCenter.dx - headRadius * 0.72, cy + r * 0.66,
+          )
+          ..cubicTo(
+            headCenter.dx - headRadius * 0.88, cy + r * 0.30,
+            headCenter.dx - headRadius * 0.86, headCenter.dy + headRadius * 0.55,
+            headCenter.dx - headRadius * 0.78, headCenter.dy + headRadius * 0.15,
+          )
+          ..close();
+        canvas.drawPath(leftStrand, hairDark);
+
+        // Right face-framing strand (mirrored).
+        final rightStrand = Path()
+          ..moveTo(headCenter.dx + headRadius * 1.0, headCenter.dy + headRadius * 0.25)
+          ..cubicTo(
+            headCenter.dx + headRadius * 1.12, headCenter.dy + headRadius * 0.95,
+            headCenter.dx + headRadius * 0.92, cy + r * 0.62,
+            headCenter.dx + headRadius * 0.72, cy + r * 0.66,
+          )
+          ..cubicTo(
+            headCenter.dx + headRadius * 0.88, cy + r * 0.30,
+            headCenter.dx + headRadius * 0.86, headCenter.dy + headRadius * 0.55,
+            headCenter.dx + headRadius * 0.78, headCenter.dy + headRadius * 0.15,
+          )
+          ..close();
+        canvas.drawPath(rightStrand, hairDark);
+        break;
+      case _AvatarHairStyle.admin:
+        canvas.drawArc(
+          Rect.fromCircle(center: headCenter, radius: headRadius * 1.02),
+          3.05,
+          3.35,
+          true,
+          hairDark,
+        );
+        break;
+    }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _PersonAvatarPainter oldDelegate) =>
+      oldDelegate.style != style;
 }
