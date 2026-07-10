@@ -23,7 +23,7 @@ class SupervisorsNotifier
     extends StateNotifier<AsyncValue<List<SupervisorModel>>> {
   final SupervisorRepository _repo;
   final dynamic _client;
-  dynamic _realtimeSub;
+  RealtimeChannel? _realtimeSub;
 
   SupervisorsNotifier(this._repo, this._client) : super(const AsyncLoading()) {
     load();
@@ -44,7 +44,12 @@ class SupervisorsNotifier
 
   @override
   void dispose() {
-    _client.removeChannel(_realtimeSub);
+    // Guard against a channel that never finished subscribing / was already
+    // torn down — passing null into removeChannel() throws.
+    final sub = _realtimeSub;
+    if (sub != null) {
+      _client.removeChannel(sub);
+    }
     super.dispose();
   }
 

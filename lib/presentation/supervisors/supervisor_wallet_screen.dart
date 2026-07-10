@@ -252,7 +252,7 @@ class SupervisorWalletScreen extends ConsumerStatefulWidget {
 
 class _SupervisorWalletScreenState
     extends ConsumerState<SupervisorWalletScreen> {
-  dynamic _realtimeSub;
+  RealtimeChannel? _realtimeSub;
 
   @override
   void initState() {
@@ -261,9 +261,10 @@ class _SupervisorWalletScreenState
   }
 
   void _subscribeRealtime() {
+    if (!mounted) return;
     final client = ref.read(supabaseProvider);
     _realtimeSub = client
-        .channel('wallet_${widget.supervisorId}')
+        .channel('wallet_${widget.supervisorId}_${DateTime.now().microsecondsSinceEpoch}')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -287,7 +288,14 @@ class _SupervisorWalletScreenState
 
   @override
   void dispose() {
-    ref.read(supabaseProvider).removeChannel(_realtimeSub);
+    // Guard against a channel that never finished subscribing / was already
+    // torn down — passing null into removeChannel() throws (this is what
+    // produced "Null check operator used on a null value" when leaving this
+    // screen very quickly after opening it, e.g. right after logout).
+    final sub = _realtimeSub;
+    if (sub != null) {
+      ref.read(supabaseProvider).removeChannel(sub);
+    }
     super.dispose();
   }
 
