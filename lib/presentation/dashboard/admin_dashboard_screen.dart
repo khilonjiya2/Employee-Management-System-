@@ -569,6 +569,94 @@ class _QuickActionBtn extends StatelessWidget {
   }
 }
 
+// Supervisor dashboard stats \u2014 a proper autoDispose FutureProvider keyed by
+// profile id, exactly like [dashboardStatsProvider] above. This replaces an
+// older pattern that cached the stats Future by hand in State fields
+// (`_statsFuture` / `_loadedForProfileId`). That manual cache was the root
+// cause of the "dashboard breaks after logout, only fixed by restarting the
+// app" bug: those fields lived on the State object, so if the widget was
+// ever rebuilt/reused across a logout->login cycle faster than the guard
+// logic expected, the screen could keep showing (or crash trying to read)
+// data tied to the PREVIOUS session. A watched autoDispose provider has no
+// such window \u2014 it is disposed the instant nothing observes it (e.g. on
+// logout, when this screen leaves the tree) and always recomputes fresh for
+// whatever profile id it's called with.
+final _supervisorDashboardStatsProvider =
+    FutureProvider.autoDispose.family<Map<String, dynamic>, String?>((ref, profileId) async {
+  if (profileId == null) {
+    return {
+      'total_employees': 0,
+      'today_submitted': false,
+      'pending_today': 0,
+      'approved_today': 0,
+    };
+  }
+
+  final client = ref.read(supabaseProvider);
+
+  final sup = await client
+      .from('supervisors')
+      .select('id')
+      .eq('profile_id', profileId)
+      .maybeSingle();
+
+  if (sup == null) {
+    return {
+      'total_employees': 0,
+      'today_submitted': false,
+      'pending_today': 0.0,
+      'approved_today': 0.0,
+    };
+  }
+
+  final supervisorId = sup['id'] as String;
+
+  final employees = await client
+      .from('supervisor_employees')
+      .select('id')
+      .eq('supervisor_id', supervisorId);
+
+  final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  final now = DateTime.now();
+  final monthStart = DateFormat('yyyy-MM-dd').format(DateTime(now.year, now.month, 1));
+  final monthEnd = DateFormat('yyyy-MM-dd').format(DateTime(now.year, now.month + 1, 0));
+
+  final todayAtt = await client
+      .from('attendance')
+      .select('id')
+      .eq('supervisor_id', supervisorId)
+      .eq('attendance_date', today)
+      .maybeSingle();
+
+  // Current-month scoped expense summary.
+  final pendingThisMonth = await client
+      .from('expenses')
+      .select('id, amount')
+      .eq('supervisor_id', supervisorId)
+      .gte('expense_date', monthStart)
+      .lte('expense_date', monthEnd)
+      .eq('status', 'pending');
+
+  final approvedThisMonth = await client
+      .from('expenses')
+      .select('id, amount')
+      .eq('supervisor_id', supervisorId)
+      .gte('expense_date', monthStart)
+      .lte('expense_date', monthEnd)
+      .eq('status', 'approved');
+
+  double sumAmount(List rows) => rows.fold<double>(
+      0, (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0));
+
+  return {
+    'supervisor_id': supervisorId,
+    'total_employees': (employees as List).length,
+    'today_submitted': todayAtt != null,
+    'pending_today': sumAmount(pendingThisMonth as List),
+    'approved_today': sumAmount(approvedThisMonth as List),
+  };
+});
+
 class SupervisorDashboardScreen extends ConsumerStatefulWidget {
   const SupervisorDashboardScreen({super.key});
 
@@ -579,33 +667,22 @@ class SupervisorDashboardScreen extends ConsumerStatefulWidget {
 
 class _SupervisorDashboardScreenState
     extends ConsumerState<SupervisorDashboardScreen> {
-  Future<Map<String, dynamic>>? _statsFuture;
-  dynamic _realtimeSub;
-  String? _loadedForProfileId;
+  // Only the realtime channel subscription is genuinely stateful here; the
+  // stats themselves now live entirely in [_supervisorDashboardStatsProvider]
+  // (see above) and are read via ref.watch in build(), never cached by hand.
+  RealtimeChannel? _realtimeSub;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _subscribeRealtime();
-      _tryLoadStats();
-    });
-  }
-
-  void _tryLoadStats() {
-    final profileId = ref.read(currentProfileProvider).valueOrNull?.id;
-    if (profileId != null && _loadedForProfileId != profileId) {
-      _loadedForProfileId = profileId;
-      setState(() {
-        _statsFuture = _loadSupervisorStats(ref, profileId);
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _subscribeRealtime());
   }
 
   void _subscribeRealtime() {
+    if (!mounted) return;
     final client = ref.read(supabaseProvider);
     _realtimeSub = client
-        .channel('sup_dashboard_rt')
+        .channel('sup_dashboard_rt_${DateTime.now().microsecondsSinceEpoch}')
         .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'attendance', callback: (_) => _refresh())
         .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'expenses', callback: (_) => _refresh())
         .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'supervisor_wallet', callback: (_) => _refresh())
@@ -614,17 +691,21 @@ class _SupervisorDashboardScreenState
 
   @override
   void dispose() {
-    ref.read(supabaseProvider).removeChannel(_realtimeSub);
+    // Guard against removing a channel that never finished subscribing (the
+    // subscribe call above is scheduled via addPostFrameCallback, so a very
+    // fast navigation away \u2014 e.g. an immediate logout \u2014 could otherwise
+    // reach dispose() while _realtimeSub is still null).
+    final sub = _realtimeSub;
+    if (sub != null) {
+      ref.read(supabaseProvider).removeChannel(sub);
+    }
     super.dispose();
   }
 
-  Future<void> _refresh() async {
+  void _refresh() {
     final profileId = ref.read(currentProfileProvider).valueOrNull?.id;
-    if (profileId == null) return;
-    final future = _loadSupervisorStats(ref, profileId);
-    setState(() => _statsFuture = future);
+    ref.invalidate(_supervisorDashboardStatsProvider(profileId));
     ref.invalidate(_unreadNotificationCountProvider);
-    await future;
   }
 
   @override
@@ -632,18 +713,16 @@ class _SupervisorDashboardScreenState
     final profile = ref.watch(currentProfileProvider).valueOrNull;
     final monthLabel = DateFormat('MMMM yyyy').format(DateTime.now());
 
-    // Load stats as soon as profile becomes available
-    if (profile != null && _loadedForProfileId != profile.id) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _tryLoadStats());
-    }
-
-    // Show loading if profile or stats not yet available
-    if (profile == null || _statsFuture == null) {
-      return Scaffold(
-        backgroundColor: const Color(0xFFF5F6FA),
-        body: const Center(child: CircularProgressIndicator()),
+    // Show loading until the profile itself is ready. Once it is, stats are
+    // watched straight from the provider below \u2014 no manual gating needed.
+    if (profile == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF5F6FA),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
+
+    final statsAsync = ref.watch(_supervisorDashboardStatsProvider(profile.id));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
@@ -659,20 +738,31 @@ class _SupervisorDashboardScreenState
           ),
         ],
       ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _statsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final stats = snapshot.data!;
-
+      body: statsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Error: $e', textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Retry'),
+                  onPressed: _refresh,
+                ),
+              ],
+            ),
+          ),
+        ),
+        data: (stats) {
           return RefreshIndicator(
-            onRefresh: _refresh,
+            onRefresh: () async {
+              _refresh();
+              await ref.read(_supervisorDashboardStatsProvider(profile.id).future);
+            },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
@@ -976,83 +1066,6 @@ void _showMyPayslips(BuildContext context) {
     );
   }
 
-  Future<Map<String, dynamic>> _loadSupervisorStats(
-    WidgetRef ref,
-    String? profileId,
-  ) async {
-    if (profileId == null) {
-      return {
-        'total_employees': 0,
-        'today_submitted': false,
-        'pending_today': 0,
-        'approved_today': 0,
-      };
-    }
-
-    final client = ref.read(supabaseProvider);
-
-    final sup = await client
-        .from('supervisors')
-        .select('id')
-        .eq('profile_id', profileId)
-        .maybeSingle();
-
-    if (sup == null) {
-      return {
-        'total_employees': 0,
-        'today_submitted': false,
-        'pending_today': 0.0,
-        'approved_today': 0.0,
-      };
-    }
-
-    final supervisorId = sup['id'] as String;
-
-    final employees = await client
-        .from('supervisor_employees')
-        .select('id')
-        .eq('supervisor_id', supervisorId);
-
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final now = DateTime.now();
-    final monthStart = DateFormat('yyyy-MM-dd').format(DateTime(now.year, now.month, 1));
-    final monthEnd = DateFormat('yyyy-MM-dd').format(DateTime(now.year, now.month + 1, 0));
-
-    final todayAtt = await client
-        .from('attendance')
-        .select('id')
-        .eq('supervisor_id', supervisorId)
-        .eq('attendance_date', today)
-        .maybeSingle();
-
-    // Current-month scoped (bug #4 fix on supervisor side too \u{2014} was 'today' only before)
-    final pendingThisMonth = await client
-        .from('expenses')
-        .select('id, amount')
-        .eq('supervisor_id', supervisorId)
-        .gte('expense_date', monthStart)
-        .lte('expense_date', monthEnd)
-        .eq('status', 'pending');
-
-    final approvedThisMonth = await client
-        .from('expenses')
-        .select('id, amount')
-        .eq('supervisor_id', supervisorId)
-        .gte('expense_date', monthStart)
-        .lte('expense_date', monthEnd)
-        .eq('status', 'approved');
-
-    double sumAmount(List rows) => rows.fold<double>(
-        0, (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0));
-
-    return {
-      'supervisor_id': supervisorId,
-      'total_employees': (employees as List).length,
-      'today_submitted': todayAtt != null,
-      'pending_today': sumAmount(pendingThisMonth as List),
-      'approved_today': sumAmount(approvedThisMonth as List),
-    };
-  }
 }
 
 
