@@ -64,6 +64,36 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         // only needed to wait for it to settle, not to succeed.
       }
 
+      // Wait for the ROLE-SPECIFIC record too, not just the profile.
+      // The profile fetch above closes the race for the `profiles` row,
+      // but an employee's dashboard also needs the linked `employees` row
+      // (found via profile_id), and a supervisor's dashboard needs the
+      // linked `supervisors` row. Those are written as separate inserts by
+      // the account-creation edge function, so on a genuinely fresh
+      // account there's a real (small, bounded) window where the profile
+      // exists but the linked row doesn't yet. Warming it here — with the
+      // same bounded retry as the profile fetch, living in the repository
+      // methods themselves — means that by the time /dashboard mounts,
+      // this data is already resolved and cached in flight, so the
+      // dashboard's own fetch lands immediately instead of being the
+      // first (and possibly losing) attempt. This is what makes every
+      // dashboard load correctly on the very first screen, not just after
+      // an in-app reload.
+      final profile = ref.read(currentProfileProvider).valueOrNull;
+      try {
+        if (profile != null) {
+          if (profile.role == 'employee') {
+            await ref.read(employeeRepositoryProvider).getByProfileId(profile.id);
+          } else if (profile.role == 'supervisor') {
+            await ref.read(supervisorRepositoryProvider).getByProfileId(profile.id);
+          }
+        }
+      } catch (_) {
+        // Same reasoning as above: don't block navigation on this — the
+        // dashboard screens have their own loading/error/empty states.
+        // We only wanted to give this fetch a head start.
+      }
+
       if (!mounted) return;
       context.go('/dashboard');
     } catch (e) {
