@@ -64,6 +64,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable.notify();
   });
 
+  // SAFETY NET (independent of any particular logout button / screen):
+  // whenever Supabase itself reports a sign-in or sign-out, force
+  // currentProfileProvider to recompute from scratch. Individual screens
+  // (Settings' sign-out button, the login screen, etc.) already do this
+  // explicitly, but a listener here means a future logout/login entry
+  // point can never re-introduce the "stale profile from the previous
+  // session" class of bug just by forgetting to call ref.invalidate.
+  authStream.listen((data) {
+    if (data.event == AuthChangeEvent.signedOut ||
+        data.event == AuthChangeEvent.signedIn) {
+      ref.invalidate(currentProfileProvider);
+    }
+  });
+
   return GoRouter(
     refreshListenable: refreshListenable,
     initialLocation: '/splash',
