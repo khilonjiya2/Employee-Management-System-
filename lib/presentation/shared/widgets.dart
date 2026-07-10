@@ -1924,15 +1924,23 @@ class _PersonAvatarPainter extends CustomPainter {
     final cy = size.height / 2;
     final r = size.width / 2;
 
-    final skin = Paint()
+    // Clothing (shoulders/body/tie) stays crisp white so it reads clearly
+    // against the coloured gradient background.
+    final clothing = Paint()
       ..color = Colors.white
+      ..isAntiAlias = true;
+    // The face itself uses a warm, neutral skin tone rather than flat white
+    // so it reads as an actual illustrated face (with features) instead of
+    // a plain pale oval/"egg".
+    final faceSkin = Paint()
+      ..color = const Color(0xFFFFDCB8)
       ..isAntiAlias = true;
     final hairDark = Paint()
       ..color = Colors.white.withOpacity(0.88)
       ..isAntiAlias = true;
-    final shade = Paint()
-      ..color = Colors.black.withOpacity(0.06)
-      ..isAntiAlias = true;
+    // Warm brown used for brows/eyes/mouth so the face reads as friendly and
+    // human rather than a blank shape.
+    const featureColor = Color(0xFF6B4A3A);
 
     final headCenter = Offset(cx, cy - r * 0.18);
     final headRadius = r * 0.32;
@@ -2015,7 +2023,7 @@ class _PersonAvatarPainter extends CustomPainter {
           ..close();
         break;
     }
-    canvas.drawPath(bodyPath, skin);
+    canvas.drawPath(bodyPath, clothing);
 
     // ---- Necktie for admin (subtle authority cue) ----
     if (style == _AvatarHairStyle.admin) {
@@ -2030,15 +2038,110 @@ class _PersonAvatarPainter extends CustomPainter {
     }
 
     // ---- Head ----
-    canvas.drawCircle(headCenter, headRadius, skin);
-    // Very soft chin shading for a touch of dimensionality.
+    canvas.drawCircle(headCenter, headRadius, faceSkin);
+    // Soft chin/jaw shading for a touch of dimensionality.
     canvas.drawArc(
       Rect.fromCircle(center: headCenter, radius: headRadius),
       0.35,
       2.4,
       false,
-      shade..style = PaintingStyle.stroke..strokeWidth = headRadius * 0.14,
+      Paint()
+        ..color = Colors.black.withOpacity(0.10)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = headRadius * 0.14,
     );
+
+    // ---- Face: eyebrows, eyes, nose hint, smiling mouth ----
+    // Coordinates are relative to headCenter/headRadius so they scale with
+    // the head regardless of overall avatar size.
+    final eyeY = headCenter.dy - headRadius * 0.06;
+    final eyeDx = headRadius * 0.34;
+    final eyeR = headRadius * 0.09;
+
+    // Eyebrows (light arcs above each eye).
+    final browPaint = Paint()
+      ..color = featureColor.withOpacity(0.85)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = headRadius * 0.09
+      ..strokeCap = StrokeCap.round
+      ..isAntiAlias = true;
+    canvas.drawArc(
+      Rect.fromCenter(
+        center: Offset(headCenter.dx - eyeDx, eyeY - headRadius * 0.22),
+        width: headRadius * 0.42,
+        height: headRadius * 0.26,
+      ),
+      3.5,
+      1.0,
+      false,
+      browPaint,
+    );
+    canvas.drawArc(
+      Rect.fromCenter(
+        center: Offset(headCenter.dx + eyeDx, eyeY - headRadius * 0.22),
+        width: headRadius * 0.42,
+        height: headRadius * 0.26,
+      ),
+      2.6,
+      1.0,
+      false,
+      browPaint,
+    );
+
+    // Eyes (simple filled dots read cleanly at small sizes).
+    final eyePaint = Paint()
+      ..color = featureColor
+      ..isAntiAlias = true;
+    canvas.drawCircle(Offset(headCenter.dx - eyeDx, eyeY), eyeR, eyePaint);
+    canvas.drawCircle(Offset(headCenter.dx + eyeDx, eyeY), eyeR, eyePaint);
+
+    // Nose (a soft curved hint, not a hard line).
+    final nosePaint = Paint()
+      ..color = Colors.black.withOpacity(0.16)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = headRadius * 0.06
+      ..strokeCap = StrokeCap.round
+      ..isAntiAlias = true;
+    final nose = Path()
+      ..moveTo(headCenter.dx, eyeY + headRadius * 0.12)
+      ..quadraticBezierTo(
+        headCenter.dx + headRadius * 0.10,
+        headCenter.dy + headRadius * 0.30,
+        headCenter.dx + headRadius * 0.04,
+        headCenter.dy + headRadius * 0.36,
+      );
+    canvas.drawPath(nose, nosePaint);
+
+    // Mouth: a gentle upward smile arc.
+    final mouthPaint = Paint()
+      ..color = featureColor.withOpacity(0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = headRadius * 0.10
+      ..strokeCap = StrokeCap.round
+      ..isAntiAlias = true;
+    canvas.drawArc(
+      Rect.fromCenter(
+        center: Offset(headCenter.dx, headCenter.dy + headRadius * 0.44),
+        width: headRadius * 0.62,
+        height: headRadius * 0.42,
+      ),
+      0.25,
+      2.6,
+      false,
+      mouthPaint,
+    );
+
+    // Faint cheek blush for warmth (kept very subtle so it stays corporate,
+    // not cartoonish).
+    final blush = Paint()
+      ..color = const Color(0xFFE8896B).withOpacity(0.18)
+      ..isAntiAlias = true;
+    canvas.drawCircle(
+        Offset(headCenter.dx - headRadius * 0.55, headCenter.dy + headRadius * 0.28),
+        headRadius * 0.16, blush);
+    canvas.drawCircle(
+        Offset(headCenter.dx + headRadius * 0.55, headCenter.dy + headRadius * 0.28),
+        headRadius * 0.16, blush);
 
     // ---- Hair on top of head, per style ----
     switch (style) {
