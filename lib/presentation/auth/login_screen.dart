@@ -72,10 +72,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // can briefly serve stale/previous data during a refetch was the
       // root cause of the "force password change shown twice" bug.
       // We've already awaited the FRESH profile above, so router redirect
-      // will correctly catch mustChangePassword == true on the very next
-      // navigation (to '/dashboard' below) using the same fresh data.
+      // will correctly catch mustChangePassword == true once SplashScreen
+      // hands off to '/dashboard' below, using that same fresh data.
 
-      context.go('/dashboard');
+      // IMPORTANT: go through '/splash', not straight to '/dashboard'.
+      // Previously this went directly to '/dashboard' after only awaiting
+      // the profile. That made a fresh login a SECOND, separately
+      // maintained "is everything ready?" code path from the one cold
+      // start uses (SplashScreen) — and it skipped the wait for the
+      // role-specific record (the `employees`/`supervisors` row linked by
+      // profile_id), which is exactly what was crashing the dashboard
+      // right after logging in and only clearing up after a full app
+      // restart (restart re-enters through SplashScreen, which does wait
+      // for it). Sending login through the same SplashScreen gate means
+      // there is exactly one place in the whole app that decides "the
+      // dashboard is safe to show now", used by both cold start and login.
+      context.go('/splash');
     } catch (e) {
       if (mounted) {
         setState(() =>
