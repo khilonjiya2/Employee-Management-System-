@@ -24,7 +24,7 @@ class EmployeesNotifier extends StateNotifier<AsyncValue<List<EmployeeModel>>> {
   bool _loading = false;
   final List<EmployeeModel> _items = [];
   Timer? _debounce;
-  dynamic _realtimeSub;
+  RealtimeChannel? _realtimeSub;
 
   EmployeesNotifier(this._repo, this._client) : super(const AsyncLoading()) {
     load();
@@ -46,7 +46,13 @@ class EmployeesNotifier extends StateNotifier<AsyncValue<List<EmployeeModel>>> {
   @override
   void dispose() {
     _debounce?.cancel();
-    _client.removeChannel(_realtimeSub);
+    // Guard against a channel that never finished subscribing / was already
+    // torn down — passing null into removeChannel() throws (see the same
+    // fix applied to AdminDashboardScreen).
+    final sub = _realtimeSub;
+    if (sub != null) {
+      _client.removeChannel(sub);
+    }
     super.dispose();
   }
 
