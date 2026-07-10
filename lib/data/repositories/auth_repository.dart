@@ -16,24 +16,54 @@ final authStateChangesProvider = StreamProvider<AuthState>((ref) {
 
 final currentProfileProvider = FutureProvider<ProfileModel?>((ref) async {
   final client = ref.read(supabaseProvider);
-  final user = client.auth.currentUser;
+
+  // THE COLD-START BUG: on a fresh app launch with an already-persisted
+  // session, Supabase restores that session from local storage
+  // asynchronously. `client.auth.currentSession` (which the router's
+  // redirect() reads to decide whether to let you into /dashboard) can go
+  // non-null a moment before `client.auth.currentUser` finishes hydrating.
+  // The old code did `if (user == null) return null;` right here — a
+  // single synchronous check — so it lost that race, returned null, and
+  // because this is a plain (non-autoDispose) FutureProvider it NEVER ran
+  // again. Every screen downstream reads `profile?.role` / `profile?.id`
+  // off that permanently-cached null, which is exactly why the dashboard
+  // came up broken/wrong on first launch but fine after a restart (by then
+  // the SDK is already warm, so currentUser is populated instantly).
+  //
+  // Fix: actively wait for currentUser to appear (bounded), instead of
+  // giving up on the first synchronous read.
+  var user = client.auth.currentUser;
+  if (user == null) {
+    for (var attempt = 0; attempt < 10 && user == null; attempt++) {
+      await Future.delayed(const Duration(milliseconds: 150));
+      user = client.auth.currentUser;
+    }
+  }
+  // Still nothing after ~1.5s of waiting — genuinely logged out, not a
+  // race. Return null so the router sends the user to /login.
   if (user == null) return null;
 
   // A brand new account is created via an edge function that creates the
   // auth user and the linked profiles row in quick succession. If a first
   // login races that write, one immediate query can come back empty and
   // the user sees a blank screen even though the account is valid. Retry
-  // briefly before giving up so first login is reliable.
-  for (var attempt = 0; attempt < 4; attempt++) {
-    final data = await client
-        .from('profiles')
-        .select()
-        .eq('id', user.id)
-        .maybeSingle();
-    if (data != null) {
-      return ProfileModel.fromJson(data);
+  // briefly before giving up so first login is reliable. This also
+  // absorbs any lingering cold-start network/RLS-token propagation delay.
+  for (var attempt = 0; attempt < 6; attempt++) {
+    try {
+      final data = await client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+      if (data != null) {
+        return ProfileModel.fromJson(data);
+      }
+    } catch (_) {
+      // Transient network/RLS hiccup right after cold start — swallow and
+      // retry rather than permanently caching a null profile.
     }
-    if (attempt < 3) {
+    if (attempt < 5) {
       await Future.delayed(Duration(milliseconds: 300 * (attempt + 1)));
     }
   }
