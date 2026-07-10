@@ -9,11 +9,12 @@ import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../shared/widgets.dart' as w;
 
+// AUTO-DISPOSE: Properly cleans up when no longer watched.
+// Keyed by profile ID to ensure fresh fetch on profile change (logout/login).
 final _employeeOwnRecordProvider =
-    FutureProvider.autoDispose<EmployeeModel?>((ref) async {
-  final profile = ref.watch(currentProfileProvider).valueOrNull;
-  if (profile == null) return null;
-  return ref.read(employeeRepositoryProvider).getByProfileId(profile.id);
+    FutureProvider.autoDispose.family<EmployeeModel?, String?>((ref, profileId) async {
+  if (profileId == null) return null;
+  return ref.read(employeeRepositoryProvider).getByProfileId(profileId);
 });
 
 final _employeeOwnAttendanceProvider = FutureProvider.autoDispose
@@ -43,7 +44,7 @@ class EmployeeDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider).valueOrNull;
-    final employeeAsync = ref.watch(_employeeOwnRecordProvider);
+    final employeeAsync = ref.watch(_employeeOwnRecordProvider(profile?.id));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
@@ -100,7 +101,34 @@ class EmployeeDashboardScreen extends ConsumerWidget {
       ),
       body: employeeAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, st) {
+          debugPrintStack(stackTrace: st);
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error: $e',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      ref.invalidate(_employeeOwnRecordProvider(profile?.id));
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
         data: (employee) {
           if (employee == null) {
             return const w.EmptyState(
@@ -200,7 +228,7 @@ class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> 
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${widget.employee.employeeCode} \u{B7} ${widget.employee.designation ?? "Employee"}',
+                          '${widget.employee.employeeCode} · ${widget.employee.designation ?? "Employee"}',
                           style: const TextStyle(
                             color: Color(0xCCFFFFFF),
                             fontFamily: 'Inter',
@@ -215,7 +243,7 @@ class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> 
             ),
             const SizedBox(height: 24),
             Text(
-              'Attendance \u{B7} $monthLabel',
+              'Attendance · $monthLabel',
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
