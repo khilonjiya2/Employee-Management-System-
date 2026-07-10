@@ -51,9 +51,20 @@ import '../../presentation/shared/main_shell.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authStream = Supabase.instance.client.auth.onAuthStateChange;
+  final refreshListenable = GoRouterRefreshStream(authStream);
+
+  // redirect() only re-runs when this listenable fires, which used to
+  // happen only on Supabase auth events. On a fresh app launch with an
+  // already-persisted session, no auth event fires, so the router could
+  // get stuck showing a blank/loading dashboard while the profile was
+  // still resolving, or skip the mustChangePassword redirect entirely.
+  // Notifying on every profile change closes that gap.
+  ref.listen(currentProfileProvider, (previous, next) {
+    refreshListenable.notify();
+  });
 
   return GoRouter(
-    refreshListenable: GoRouterRefreshStream(authStream),
+    refreshListenable: refreshListenable,
     initialLocation: '/login',
 
     redirect: (context, state) {
@@ -391,6 +402,8 @@ class GoRouterRefreshStream extends ChangeNotifier {
   }
 
   late final StreamSubscription<dynamic> _subscription;
+
+  void notify() => notifyListeners();
 
   @override
   void dispose() {
