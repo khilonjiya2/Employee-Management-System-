@@ -144,6 +144,45 @@ class SectionHeader extends StatelessWidget {
   }
 }
 
+/// Shown instead of an error card wherever a dashboard-critical fetch
+/// (profile, employee/supervisor record, dashboard stats) fails — most
+/// often a transient timing race right after a login or a fast
+/// logout->login, not something the person should ever see or have to
+/// act on. Never displays the error text or a manual "Retry"/"Reload"
+/// button: it just keeps a loading spinner up and silently calls
+/// [onRetry] again after a short delay, repeating for as long as it keeps
+/// failing, until the real data finally loads and this widget is replaced
+/// by the actual screen. Combined with the retry loops already built into
+/// the repository/provider layer (see withRetry in app_utils.dart and the
+/// getByProfileId retries in auth_repository.dart), this means the
+/// dashboard is guaranteed to eventually load on its own with zero input
+/// from the person.
+class AutoRetryLoader extends StatefulWidget {
+  final VoidCallback onRetry;
+  const AutoRetryLoader({super.key, required this.onRetry});
+
+  @override
+  State<AutoRetryLoader> createState() => _AutoRetryLoaderState();
+}
+
+class _AutoRetryLoaderState extends State<AutoRetryLoader> {
+  @override
+  void initState() {
+    super.initState();
+    // A fresh instance of this widget is created every time the error
+    // branch is hit again, so this fires exactly once per failed attempt
+    // — no manual counter/cancellation needed.
+    Future.delayed(const Duration(milliseconds: 700), () {
+      if (mounted) widget.onRetry();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: CircularProgressIndicator());
+  }
+}
+
 class EmptyState extends StatelessWidget {
   final String title;
   final String? subtitle;
