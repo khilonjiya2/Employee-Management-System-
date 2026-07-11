@@ -72,22 +72,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // can briefly serve stale/previous data during a refetch was the
       // root cause of the "force password change shown twice" bug.
       // We've already awaited the FRESH profile above, so router redirect
-      // will correctly catch mustChangePassword == true once SplashScreen
-      // hands off to '/dashboard' below, using that same fresh data.
+      // will correctly catch mustChangePassword == true once we hand off
+      // to '/dashboard' below, using that same fresh data.
 
-      // IMPORTANT: go through '/splash', not straight to '/dashboard'.
-      // Previously this went directly to '/dashboard' after only awaiting
-      // the profile. That made a fresh login a SECOND, separately
-      // maintained "is everything ready?" code path from the one cold
-      // start uses (SplashScreen) — and it skipped the wait for the
-      // role-specific record (the `employees`/`supervisors` row linked by
-      // profile_id), which is exactly what was crashing the dashboard
-      // right after logging in and only clearing up after a full app
-      // restart (restart re-enters through SplashScreen, which does wait
-      // for it). Sending login through the same SplashScreen gate means
-      // there is exactly one place in the whole app that decides "the
-      // dashboard is safe to show now", used by both cold start and login.
-      context.go('/splash');
+      // Give the role-specific record (the employees/supervisors row
+      // linked by profile_id) a head start before the dashboard mounts —
+      // see warmRoleSpecificRecord's doc comment. This replaces the old
+      // "route through /splash" indirection: DashboardRouterWidget and
+      // each role's dashboard already show their own loading state via
+      // AsyncValue while this resolves, so there's no need for a separate
+      // screen to gate navigation on it — going straight to /dashboard
+      // is both simpler and faster.
+      await warmRoleSpecificRecord(ref, profile);
+
+      if (!mounted) return;
+      context.go('/dashboard');
     } catch (e) {
       if (mounted) {
         setState(() =>

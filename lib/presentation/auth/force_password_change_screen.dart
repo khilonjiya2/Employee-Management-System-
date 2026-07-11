@@ -69,13 +69,14 @@ class _ForcePasswordChangeScreenState
       ref.invalidate(currentProfileProvider);
       await ref.read(currentProfileProvider.future);
 
-      // Step 5: Release the lock and navigate — through '/splash' so this
-      // uses the exact same readiness gate as cold start and login (waits
-      // for the role-specific employees/supervisors record too, not just
-      // the profile). See the matching comment in login_screen.dart.
+      // Step 5: Release the lock and warm the role-specific record before
+      // handing off to '/dashboard' directly (see warmRoleSpecificRecord's
+      // doc comment — this replaces the old '/splash' indirection).
       passwordChangeInProgress = false;
 
-      if (mounted) context.go('/splash');
+      await warmRoleSpecificRecord(ref, ref.read(currentProfileProvider).valueOrNull);
+
+      if (mounted) context.go('/dashboard');
     } catch (e) {
       _completed = false;
       passwordChangeInProgress = false;
