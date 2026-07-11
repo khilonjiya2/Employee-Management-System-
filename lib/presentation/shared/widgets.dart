@@ -1692,12 +1692,11 @@ class CashfreePayButton extends ConsumerWidget {
 //   1) If a photo has been uploaded -> ALWAYS show the photo.
 //   2) Otherwise, if a gender is on file -> show a male/female/other
 //      illustrated avatar.
-//   3) Otherwise (no gender on file) -> show the person's initials instead
-//      of guessing a gender. Admins with no gender on file keep the
-//      dedicated admin badge.
+//   3) Otherwise (no gender on file) -> show the neutral illustrated
+//      avatar, consistently for every role (employee, supervisor, admin).
 //
 // The photo path is also crash-proof: a broken/expired/offline image URL
-// will gracefully fall back to the gender/initials avatar instead of
+// will gracefully fall back to the gender/neutral avatar instead of
 // showing a broken-image glyph or throwing.
 // gender: 'male' | 'female' | 'other' | null
 class GenderAvatar extends StatelessWidget {
@@ -1720,17 +1719,16 @@ class GenderAvatar extends StatelessWidget {
     switch (gender) {
       case 'female':
         return _IllustratedAvatar(radius: radius, asset: _IllustratedAvatar.female);
-      case 'other':
-        return _IllustratedAvatar(radius: radius, asset: _IllustratedAvatar.neutral);
       case 'male':
         return _IllustratedAvatar(radius: radius, asset: _IllustratedAvatar.male);
       default:
-        // No gender on file. Admins get a dedicated badge; everyone else
-        // gets their initials rather than a guessed-at gender avatar.
-        if (isAdmin) {
-          return _CorporateBadgeAvatar(radius: radius);
-        }
-        return _InitialsAvatar(radius: radius, name: name);
+        // 'other', or no gender on file at all — always the neutral
+        // illustrated avatar. Previously this fell back to text initials
+        // (or an admin badge), which is what made it look like the avatar
+        // "wasn't loading" for anyone without a gender set. Same visual
+        // treatment everywhere now: employee dashboard, employee/supervisor
+        // lists, admin dashboard — no exceptions.
+        return _IllustratedAvatar(radius: radius, asset: _IllustratedAvatar.neutral);
     }
   }
 
