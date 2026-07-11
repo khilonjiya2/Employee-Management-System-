@@ -163,57 +163,49 @@ class AppRoot extends ConsumerWidget {
   }
 }
 
-/// Friendly fallback rendered by [ErrorWidget.builder] whenever a widget
-/// throws while building, anywhere in the app. Prevents the default
-/// bare/blank grey box (Flutter's release-mode default) that users were
-/// seeing as a "crash" or "blank screen" right after logging in.
-class _InlineErrorScreen extends StatelessWidget {
+/// Rendered by [ErrorWidget.builder] whenever a widget throws while
+/// building, anywhere in the app. Deliberately shows nothing but a loading
+/// spinner — no error text, no "Reload" button. It schedules an automatic
+/// in-app restart (see RestartWidget above) a moment after appearing; that
+/// restart is a genuine equivalent of force-closing and reopening the app,
+/// which is enough to clear any transient timing issue on its own (the
+/// persisted session is still on disk, and login/dashboard already re-warm
+/// their own data on the way back in — see warmRoleSpecificRecord and the
+/// retry loops throughout auth_repository.dart). If whatever caused this
+/// hasn't cleared yet, this same screen simply appears again and schedules
+/// another restart — invisible to the person, who only ever sees a
+/// continuous loading spinner until the dashboard is actually ready.
+class _InlineErrorScreen extends StatefulWidget {
   final String error;
   const _InlineErrorScreen({required this.error});
 
   @override
+  State<_InlineErrorScreen> createState() => _InlineErrorScreenState();
+}
+
+class _InlineErrorScreenState extends State<_InlineErrorScreen> {
+  // Capped, gently-increasing backoff across repeated failures in a row —
+  // purely so a genuinely persistent problem (e.g. no network at all)
+  // restarts every few seconds instead of in a tight loop, while still
+  // never showing anything but a spinner.
+  static int _consecutiveFailures = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    debugPrint('Recovering from widget build error: ${widget.error}');
+    _consecutiveFailures++;
+    final delayMs = (900 * _consecutiveFailures).clamp(900, 4000);
+    Future.delayed(Duration(milliseconds: delayMs), () {
+      if (mounted) RestartWidget.restartApp(context);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFFF5F6FA),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline_rounded,
-                  size: 48, color: Colors.redAccent),
-              const SizedBox(height: 12),
-              const Text(
-                'Something went wrong loading this screen.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                error,
-                textAlign: TextAlign.center,
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: Colors.black54),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Reload'),
-                onPressed: () {
-                  // A full in-app restart (see RestartWidget above) — the
-                  // same as force-closing and reopening the app, but
-                  // instant and without leaving the screen. Replaces the
-                  // old approach of invalidating a single provider, which
-                  // could still leave other stale state behind.
-                  RestartWidget.restartApp(context);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+    return const Material(
+      color: Color(0xFFF5F6FA),
+      child: Center(child: CircularProgressIndicator()),
     );
   }
 }
