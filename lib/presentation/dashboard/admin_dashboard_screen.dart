@@ -621,11 +621,22 @@ final _supervisorDashboardStatsProvider =
 
   final client = ref.read(supabaseProvider);
 
-  final sup = await client
-      .from('supervisors')
-      .select('id')
-      .eq('profile_id', profileId)
-      .maybeSingle();
+  // Retry this lookup — same reasoning as EmployeeRepository.getByProfileId:
+  // right after a login (especially a fast logout->login as a different
+  // user), this can transiently race RLS/JWT context propagation and come
+  // back null even though the row genuinely exists, which used to make the
+  // dashboard silently show all-zero stats until manually refreshed. A
+  // null result here isn't a thrown error, so retry on the value itself.
+  Map<String, dynamic>? sup;
+  for (var attempt = 0; attempt < 4; attempt++) {
+    sup = await client
+        .from('supervisors')
+        .select('id')
+        .eq('profile_id', profileId)
+        .maybeSingle();
+    if (sup != null) break;
+    if (attempt < 3) await Future.delayed(const Duration(milliseconds: 300));
+  }
 
   if (sup == null) {
     return {
@@ -638,39 +649,39 @@ final _supervisorDashboardStatsProvider =
 
   final supervisorId = sup['id'] as String;
 
-  final employees = await client
-      .from('supervisor_employees')
-      .select('id')
-      .eq('supervisor_id', supervisorId);
-
   final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
   final now = DateTime.now();
   final monthStart = DateFormat('yyyy-MM-dd').format(DateTime(now.year, now.month, 1));
   final monthEnd = DateFormat('yyyy-MM-dd').format(DateTime(now.year, now.month + 1, 0));
 
-  final todayAtt = await client
-      .from('attendance')
-      .select('id')
-      .eq('supervisor_id', supervisorId)
-      .eq('attendance_date', today)
-      .maybeSingle();
+  final results = await withRetry(() => Future.wait<dynamic>([
+        client.from('supervisor_employees').select('id').eq('supervisor_id', supervisorId) as Future<dynamic>,
+        client
+            .from('attendance')
+            .select('id')
+            .eq('supervisor_id', supervisorId)
+            .eq('attendance_date', today)
+            .maybeSingle() as Future<dynamic>,
+        client
+            .from('expenses')
+            .select('id, amount')
+            .eq('supervisor_id', supervisorId)
+            .gte('expense_date', monthStart)
+            .lte('expense_date', monthEnd)
+            .eq('status', 'pending') as Future<dynamic>,
+        client
+            .from('expenses')
+            .select('id, amount')
+            .eq('supervisor_id', supervisorId)
+            .gte('expense_date', monthStart)
+            .lte('expense_date', monthEnd)
+            .eq('status', 'approved') as Future<dynamic>,
+      ]));
 
-  // Current-month scoped expense summary.
-  final pendingThisMonth = await client
-      .from('expenses')
-      .select('id, amount')
-      .eq('supervisor_id', supervisorId)
-      .gte('expense_date', monthStart)
-      .lte('expense_date', monthEnd)
-      .eq('status', 'pending');
-
-  final approvedThisMonth = await client
-      .from('expenses')
-      .select('id, amount')
-      .eq('supervisor_id', supervisorId)
-      .gte('expense_date', monthStart)
-      .lte('expense_date', monthEnd)
-      .eq('status', 'approved');
+  final employees = results[0];
+  final todayAtt = results[1];
+  final pendingThisMonth = results[2];
+  final approvedThisMonth = results[3];
 
   double sumAmount(List rows) => rows.fold<double>(
       0, (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0));
