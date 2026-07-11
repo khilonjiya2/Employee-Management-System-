@@ -32,7 +32,7 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<ExpenseModel>>> {
 
   void _subscribeRealtime() {
     _realtimeSub = _client
-.channel('expenses_realtime_${DateTime.now().microsecondsSinceEpoch}')
+        .channel('expenses_realtime_${DateTime.now().microsecondsSinceEpoch}')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
