@@ -32,7 +32,7 @@ class SupervisorsNotifier
 
   void _subscribeRealtime() {
     _realtimeSub = _client
-        .channel('supervisors_changes')
+.channel('supervisors_changes_${DateTime.now().microsecondsSinceEpoch}')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
