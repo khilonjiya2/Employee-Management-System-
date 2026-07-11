@@ -151,36 +151,14 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       ),
       body: stats.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, stack) => Padding(
-          padding: const EdgeInsets.all(16),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.red.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.shade200),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Dashboard Error:',
-                    style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16)),
-                const SizedBox(height: 8),
-                Text(e.toString(),
-                    style: const TextStyle(color: Colors.red)),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.refresh_rounded, size: 16),
-                  label: const Text('Retry'),
-                  onPressed: () => ref.invalidate(dashboardStatsProvider),
-                ),
-              ],
-            ),
-          ),
+        // Never show an error card or a manual "Retry" button — a failure
+        // here right after login/logout is expected to be a transient
+        // timing race (RLS/JWT context still propagating), and it's
+        // already wrapped in its own retry loop (see dashboardStatsProvider
+        // in auth_repository.dart). Keep the spinner up and retry silently
+        // until it resolves.
+        error: (e, stack) => w.AutoRetryLoader(
+          onRetry: () => ref.invalidate(dashboardStatsProvider),
         ),
         data: (data) => RefreshIndicator(
           // Awaits the actual refetch so the spinner stays until fresh data
@@ -778,23 +756,9 @@ class _SupervisorDashboardScreenState
       ),
       body: statsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Error: $e', textAlign: TextAlign.center),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.refresh_rounded, size: 16),
-                  label: const Text('Retry'),
-                  onPressed: _refresh,
-                ),
-              ],
-            ),
-          ),
-        ),
+        // Never show an error or a manual "Retry" button here — see the
+        // matching comment on the admin dashboard's stats.when() above.
+        error: (e, _) => w.AutoRetryLoader(onRetry: _refresh),
         data: (stats) {
           return RefreshIndicator(
             onRefresh: () async {

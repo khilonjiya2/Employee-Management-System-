@@ -9,12 +9,11 @@ import '../../data/models/app_models.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../shared/widgets.dart' as w;
 
-// AUTO-DISPOSE: Properly cleans up when no longer watched.
-// Keyed by profile ID to ensure fresh fetch on profile change (logout/login).
 final _employeeOwnRecordProvider =
-    FutureProvider.autoDispose.family<EmployeeModel?, String?>((ref, profileId) async {
-  if (profileId == null) return null;
-  return ref.read(employeeRepositoryProvider).getByProfileId(profileId);
+    FutureProvider.autoDispose<EmployeeModel?>((ref) async {
+  final profile = ref.watch(currentProfileProvider).valueOrNull;
+  if (profile == null) return null;
+  return ref.read(employeeRepositoryProvider).getByProfileId(profile.id);
 });
 
 final _employeeOwnAttendanceProvider = FutureProvider.autoDispose
@@ -44,7 +43,7 @@ class EmployeeDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider).valueOrNull;
-    final employeeAsync = ref.watch(_employeeOwnRecordProvider(profile?.id));
+    final employeeAsync = ref.watch(_employeeOwnRecordProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
@@ -101,34 +100,13 @@ class EmployeeDashboardScreen extends ConsumerWidget {
       ),
       body: employeeAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) {
-          debugPrintStack(stackTrace: st);
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error: $e',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      ref.invalidate(_employeeOwnRecordProvider(profile?.id));
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+        // Never show a raw error here — see the matching comment on the
+        // admin/supervisor dashboards' stats.when() in
+        // admin_dashboard_screen.dart. Keep the spinner up and retry
+        // silently until the record loads.
+        error: (e, _) => w.AutoRetryLoader(
+          onRetry: () => ref.invalidate(_employeeOwnRecordProvider),
+        ),
         data: (employee) {
           if (employee == null) {
             return const w.EmptyState(
@@ -228,7 +206,7 @@ class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> 
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${widget.employee.employeeCode} · ${widget.employee.designation ?? "Employee"}',
+                          '${widget.employee.employeeCode} \u{B7} ${widget.employee.designation ?? "Employee"}',
                           style: const TextStyle(
                             color: Color(0xCCFFFFFF),
                             fontFamily: 'Inter',
@@ -243,7 +221,7 @@ class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> 
             ),
             const SizedBox(height: 24),
             Text(
-              'Attendance · $monthLabel',
+              'Attendance \u{B7} $monthLabel',
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
