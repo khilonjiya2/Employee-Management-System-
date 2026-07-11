@@ -162,3 +162,32 @@ class ValidationUtils {
     return null;
   }
 }
+
+/// Retries [action] a few times with a short, increasing delay before
+/// giving up. Used for dashboard/profile-linked data fetches that can
+/// transiently race a just-completed login or logout — the row genuinely
+/// exists, but a fresh RLS/JWT context or a brand-new account's linked row
+/// (created by an edge function a beat after the profile itself) hasn't
+/// fully propagated yet. This is what makes the dashboard load correctly
+/// the first time after logging in — including immediately after logging
+/// out and back in as a different user — without ever needing a manual
+/// reload: any transient hiccup resolves itself within about a second and
+/// a half instead of surfacing as an error or requiring the person to tap
+/// anything.
+Future<T> withRetry<T>(
+  Future<T> Function() action, {
+  int attempts = 4,
+  Duration initialDelay = const Duration(milliseconds: 250),
+}) async {
+  for (var attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await action();
+    } catch (_) {
+      if (attempt == attempts - 1) rethrow;
+      await Future.delayed(initialDelay * (attempt + 1));
+    }
+  }
+  // Unreachable — the loop above always either returns or rethrows on the
+  // final attempt — but Dart's analyzer needs an explicit exit path.
+  return action();
+}
