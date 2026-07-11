@@ -33,7 +33,7 @@ class EmployeesNotifier extends StateNotifier<AsyncValue<List<EmployeeModel>>> {
 
   void _subscribeRealtime() {
     _realtimeSub = _client
-        .channel('employees_changes')
+        .channel('employees_changes_${DateTime.now().microsecondsSinceEpoch}')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
