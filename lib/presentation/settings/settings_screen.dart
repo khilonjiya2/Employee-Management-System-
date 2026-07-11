@@ -48,6 +48,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       await client.from('profiles').update({'profile_photo_url': url}).eq('id', user.id);
 
+      // The rest of the app (employee/supervisor lists, dashboards, admin
+      // views) reads the photo from employees.employee_photo_url /
+      // supervisors.profile_photo_url — NOT from profiles.profile_photo_url.
+      // Without this, a self-uploaded photo only ever showed up here in
+      // Settings and nowhere else. Mirror it onto the role-specific table
+      // (both tables have a profile_id column linking back to this user)
+      // so it takes effect everywhere immediately, the same as when an
+      // admin uploads a photo for someone.
+      final role = ref.read(currentProfileProvider).valueOrNull?.role;
+      if (role == 'employee') {
+        await client
+            .from('employees')
+            .update({'employee_photo_url': url}).eq('profile_id', user.id);
+      } else if (role == 'supervisor') {
+        await client
+            .from('supervisors')
+            .update({'profile_photo_url': url}).eq('profile_id', user.id);
+      }
+
       ref.invalidate(currentProfileProvider);
 
       if (mounted) {
