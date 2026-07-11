@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import '../../core/errors/exceptions.dart' as app_errors;
+import '../../core/utils/app_utils.dart' show withRetry;
 
 import '../models/app_models.dart';
 
@@ -74,6 +75,33 @@ final currentUserRoleProvider = Provider<String>((ref) {
   final profile = ref.watch(currentProfileProvider);
   return profile.valueOrNull?.role ?? 'supervisor';
 });
+
+/// Prefetches the role-specific record (the `employees` or `supervisors`
+/// row linked to a profile via profile_id) right after a successful
+/// login or forced password change, so it's already warmed in cache by
+/// the time the dashboard mounts. This used to be SplashScreen's job —
+/// login and password-change routed through '/splash' specifically to
+/// get this warm-up before entering '/dashboard'. Now the dashboards
+/// themselves (DashboardRouterWidget and each role's screen) already show
+/// a proper loading state via AsyncValue while their own data resolves,
+/// so a separate splash gate is no longer needed; this just gives that
+/// first fetch a head start rather than leaving it as the dashboard's own
+/// first (and, right after a fast logout/login, occasionally losing)
+/// attempt. Best-effort only — never throws, and never blocks navigation
+/// on success or failure.
+Future<void> warmRoleSpecificRecord(WidgetRef ref, ProfileModel? profile) async {
+  if (profile == null) return;
+  try {
+    if (profile.role == 'employee') {
+      await ref.read(employeeRepositoryProvider).getByProfileId(profile.id);
+    } else if (profile.role == 'supervisor') {
+      await ref.read(supervisorRepositoryProvider).getByProfileId(profile.id);
+    }
+  } catch (_) {
+    // The dashboard has its own loading/error/retry states and will
+    // fetch this again itself if this warm-up attempt didn't succeed.
+  }
+}
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(ref.watch(supabaseProvider));
@@ -295,12 +323,41 @@ class EmployeeRepository {
         .select('*, departments(name), locations(name)')
         .single();
 
-    await _client.from('supervisor_employees').delete().eq('employee_id', id);
+    // Only touch the supervisor_employees link if this update actually
+    // carries a supervisor_id, and only if it's actually different from
+    // what's already assigned. This used to unconditionally delete then
+    // re-insert the link on EVERY edit, even ones that never touched the
+    // supervisor field. When a supervisor (not admin) edits their own
+    // employee, the delete is blocked by RLS (supervisors don't have
+    // delete rights on supervisor_employees), so it silently affects 0
+    // rows — and the re-insert then collides with the still-existing row,
+    // throwing "duplicate key value violates unique constraint
+    // supervisor_employees_supervisor_id_employee_id_key". Checking first
+    // avoids the round trip entirely in the common case, and catching a
+    // duplicate-key conflict on the insert (below) makes it safe even if
+    // the delete silently no-ops for some caller's role.
     if (supervisorId != null) {
-      await _client.from('supervisor_employees').insert({
-        'employee_id': id,
-        'supervisor_id': supervisorId,
-      });
+      final existing = await _client
+          .from('supervisor_employees')
+          .select('supervisor_id')
+          .eq('employee_id', id)
+          .maybeSingle();
+      final existingSupervisorId = existing?['supervisor_id'] as String?;
+      if (existingSupervisorId != supervisorId) {
+        await _client.from('supervisor_employees').delete().eq('employee_id', id);
+        try {
+          await _client.from('supervisor_employees').insert({
+            'employee_id': id,
+            'supervisor_id': supervisorId,
+          });
+        } on PostgrestException catch (e) {
+          // The link already exists — e.g. the delete above was silently
+          // blocked by RLS for this caller's role. That's the desired end
+          // state anyway, so treat a duplicate-key conflict as a no-op
+          // rather than surfacing it as a failed update.
+          if (e.code != '23505') rethrow;
+        }
+      }
     }
 
     await _logAudit('employee_updated', 'employees', id, null, result);
@@ -421,13 +478,28 @@ class SupervisorRepository {
   }
 
   Future<SupervisorModel?> getByProfileId(String profileId) async {
-    final data = await _client
-        .from('supervisors')
-        .select()
-        .eq('profile_id', profileId)
-        .maybeSingle();
-    if (data == null) return null;
-    return SupervisorModel.fromJson(data);
+    // Mirrors EmployeeRepository.getByProfileId — this was previously a
+    // single, non-retrying query, while the employee equivalent already
+    // had this exact retry loop for this exact race. A supervisor account
+    // is created via an edge function that writes the auth user, the
+    // profiles row, and the supervisors row (linked by profile_id) in
+    // quick succession; a first-login/cold-start (or a fast logout->login)
+    // query can land in the brief window before that link is fully
+    // committed, come back empty, and leave the supervisor dashboard
+    // stuck needing a manual reload before it would land after that
+    // window had already closed.
+    for (var attempt = 0; attempt < 4; attempt++) {
+      final data = await _client
+          .from('supervisors')
+          .select()
+          .eq('profile_id', profileId)
+          .maybeSingle();
+      if (data != null) return SupervisorModel.fromJson(data);
+      if (attempt < 3) {
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+    }
+    return null;
   }
 
   Future<SupervisorModel> create(
@@ -1460,14 +1532,21 @@ final dashboardStatsProvider =
   final monthStart = DateTime(now.year, now.month, 1);
   final monthEnd = DateTime(now.year, now.month + 1, 0);
 
-  final results = await Future.wait<dynamic>([
-    client.from('employees').select('id') as Future<dynamic>,
-    client.from('employees').select('id').eq('status', 'active') as Future<dynamic>,
-    ref.read(attendanceRepositoryProvider).getTodaySummary(),
-    ref.read(expenseRepositoryProvider).getSummary(fromDate: monthStart, toDate: monthEnd),
-    ref.read(payrollRepositoryProvider).getMonthlySummary(now.month, now.year),
-    ref.read(supervisorPayrollRepositoryProvider).getMonthlySummary(now.month, now.year),
-  ]);
+  // Wrapped in a bounded retry: right after a fast logout->login (as the
+  // same or a different user), these queries can transiently fail while
+  // the new session's RLS/JWT context is still propagating — that used to
+  // surface as a dashboard error card requiring a manual tap of "Retry",
+  // or, for anything not already behind an AsyncValue boundary, the app's
+  // generic crash screen. Retrying here means it resolves itself within
+  // about a second and a half with no input needed.
+  final results = await withRetry(() => Future.wait<dynamic>([
+        client.from('employees').select('id') as Future<dynamic>,
+        client.from('employees').select('id').eq('status', 'active') as Future<dynamic>,
+        ref.read(attendanceRepositoryProvider).getTodaySummary(),
+        ref.read(expenseRepositoryProvider).getSummary(fromDate: monthStart, toDate: monthEnd),
+        ref.read(payrollRepositoryProvider).getMonthlySummary(now.month, now.year),
+        ref.read(supervisorPayrollRepositoryProvider).getMonthlySummary(now.month, now.year),
+      ]));
 
   final totalEmp = results[0] as List;
   final activeEmp = results[1] as List;
