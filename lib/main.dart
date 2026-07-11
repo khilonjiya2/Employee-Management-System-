@@ -109,8 +109,13 @@ Future<void> main() async {
 /// and reopening the app, done in-app in milliseconds, instead of trying
 /// to guess which one or two providers need `ref.invalidate`-ing to
 /// recover from an unexpected error. The persisted Supabase session is
-/// still on disk, so the fresh pass through SplashScreen picks it back up
-/// exactly like a real cold start would.
+/// still on disk, so redirect() in app_router.dart sends it straight back
+/// to '/dashboard' exactly like a real cold start would. This exists as a
+/// last-resort safety net for a genuinely unexpected error, not as a
+/// required step of any normal flow — login and post-password-change
+/// navigation warm up the data they need before ever reaching the
+/// dashboard (see warmRoleSpecificRecord in auth_repository.dart), and
+/// every dashboard-critical fetch retries transient failures on its own.
 class RestartWidget extends StatefulWidget {
   final Widget child;
   const RestartWidget({super.key, required this.child});
