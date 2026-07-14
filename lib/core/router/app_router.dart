@@ -64,17 +64,47 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable.notify();
   });
 
-  // SAFETY NET (independent of any particular logout button / screen):
-  // whenever Supabase itself reports a sign-in or sign-out, force
-  // currentProfileProvider to recompute from scratch. Individual screens
-  // (Settings' sign-out button, the login screen, etc.) already do this
-  // explicitly, but a listener here means a future logout/login entry
-  // point can never re-introduce the "stale profile from the previous
-  // session" class of bug just by forgetting to call ref.invalidate.
-  authStream.listen((data) {
-    if (data.event == AuthChangeEvent.signedOut ||
-        data.event == AuthChangeEvent.signedIn) {
+  // SINGLE SOURCE OF TRUTH for everything that needs to happen in reaction
+  // to a Supabase sign-in/sign-out. This used to be split three ways: this
+  // listener, PLUS separate ad-hoc `ref.invalidate(currentProfileProvider)`
+  // calls in login_screen.dart and settings_screen.dart. A sign-in or
+  // sign-out could therefore trigger 2-3 independent, uncoordinated
+  // invalidations of currentProfileProvider in close succession — each one
+  // kicking off its own fetch, racing the others — which is what made the
+  // dashboard occasionally load with a stale or half-ready profile right
+  // after a fast logout->login. login_screen.dart and settings_screen.dart
+  // have been simplified to just call signIn/signOut and navigate
+  // optimistically; ALL profile invalidation and role-record warm-up now
+  // happens exactly once, right here, driven only by the real event
+  // Supabase itself reports — not by guessing when a screen thinks it's
+  // done.
+  var authEventGeneration = 0;
+  authStream.listen((data) async {
+    final myGeneration = ++authEventGeneration;
+
+    if (data.event == AuthChangeEvent.signedOut) {
       ref.invalidate(currentProfileProvider);
+      return;
+    }
+
+    if (data.event == AuthChangeEvent.signedIn) {
+      ref.invalidate(currentProfileProvider);
+      try {
+        final profile = await ref.read(currentProfileProvider.future);
+        // A newer auth event (e.g. a fast sign-out right after this
+        // sign-in) has already superseded this one — don't act on data
+        // that no longer reflects who's actually signed in.
+        if (myGeneration != authEventGeneration) return;
+        await warmRoleSpecificRecord(
+          ref.read(employeeRepositoryProvider),
+          ref.read(supervisorRepositoryProvider),
+          profile,
+        );
+      } catch (_) {
+        // The dashboard has its own loading/error/retry states (see
+        // DashboardRouterWidget and AutoRetryLoader) and will pick this up
+        // itself regardless of whether this warm-up attempt succeeded.
+      }
     }
   });
 
