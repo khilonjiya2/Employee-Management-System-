@@ -534,9 +534,13 @@ void _showPaymentModuleSettings(BuildContext context, WidgetRef ref) {
   }
 
   Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
+    // No manual provider invalidation here anymore — the router's central
+    // auth-event listener (see app_router.dart) is now the single place
+    // that reacts to a sign-out by invalidating currentProfileProvider.
+    // dashboardStatsProvider is autoDispose and gets torn down on its own
+    // once its last watcher (the dashboard we're about to navigate away
+    // from) unmounts.
     await ref.read(authRepositoryProvider).signOut();
-    ref.invalidate(currentProfileProvider);
-    ref.invalidate(dashboardStatsProvider);
     if (!context.mounted) return;
     context.go('/login');
   }
