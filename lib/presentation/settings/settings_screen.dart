@@ -46,28 +46,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       final url = client.storage.from('employee_photos').getPublicUrl(path);
 
-      await client.from('profiles').update({'profile_photo_url': url}).eq('id', user.id);
+      // Uses a SECURITY DEFINER RPC (see supabase_migration_session_and_photo.sql)
+      // instead of updating profiles/employees/supervisors directly. A
+      // direct `.update()` on employees/supervisors from here could be
+      // silently blocked by RLS for an employee/supervisor updating their
+      // OWN record (many setups only grant that to admins) — and Postgres
+      // doesn't error on an update that matches 0 rows, so the app had no
+      // way to know it failed. That's exactly why the Settings preview
+      // (which just shows the locally-picked file) looked right while the
+      // employee's own dashboard — which reads employees.employee_photo_url,
+      // not profiles.profile_photo_url — never got the new photo. This RPC
+      // runs with elevated privileges but only ever touches the caller's
+      // own rows, so it updates the right table for the right person no
+      // matter what role is calling it.
+      await client.rpc('update_own_photo', params: {'p_photo_url': url});
 
-      // The rest of the app (employee/supervisor lists, dashboards, admin
-      // views) reads the photo from employees.employee_photo_url /
-      // supervisors.profile_photo_url — NOT from profiles.profile_photo_url.
-      // Without this, a self-uploaded photo only ever showed up here in
-      // Settings and nowhere else. Mirror it onto the role-specific table
-      // (both tables have a profile_id column linking back to this user)
-      // so it takes effect everywhere immediately, the same as when an
-      // admin uploads a photo for someone.
-      final role = ref.read(currentProfileProvider).valueOrNull?.role;
-      if (role == 'employee') {
-        await client
-            .from('employees')
-            .update({'employee_photo_url': url}).eq('profile_id', user.id);
-      } else if (role == 'supervisor') {
-        await client
-            .from('supervisors')
-            .update({'profile_photo_url': url}).eq('profile_id', user.id);
-      }
-
-      ref.invalidate(currentProfileProvider);
+      ref.invalidate(sessionContextProvider); // real source, see auth_repository.dart
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -118,7 +112,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 await client
                     .from('profiles')
                     .update({'full_name': name}).eq('id', user.id);
-                ref.invalidate(currentProfileProvider);
+                ref.invalidate(sessionContextProvider); // real source, see auth_repository.dart
                 if (context.mounted) Navigator.pop(context);
               },
               child: const Text('Save'),
@@ -222,7 +216,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 if (user == null) return;
                                 await client.from('profiles')
                                     .update({'gender': g}).eq('id', user.id);
-                                ref.invalidate(currentProfileProvider);
+                                ref.invalidate(sessionContextProvider); // real source, see auth_repository.dart
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
