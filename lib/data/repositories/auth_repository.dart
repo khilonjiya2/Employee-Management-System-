@@ -89,13 +89,17 @@ final currentUserRoleProvider = Provider<String>((ref) {
 /// first (and, right after a fast logout/login, occasionally losing)
 /// attempt. Best-effort only — never throws, and never blocks navigation
 /// on success or failure.
-Future<void> warmRoleSpecificRecord(WidgetRef ref, ProfileModel? profile) async {
+Future<void> warmRoleSpecificRecord(
+  EmployeeRepository employeeRepo,
+  SupervisorRepository supervisorRepo,
+  ProfileModel? profile,
+) async {
   if (profile == null) return;
   try {
     if (profile.role == 'employee') {
-      await ref.read(employeeRepositoryProvider).getByProfileId(profile.id);
+      await employeeRepo.getByProfileId(profile.id);
     } else if (profile.role == 'supervisor') {
-      await ref.read(supervisorRepositoryProvider).getByProfileId(profile.id);
+      await supervisorRepo.getByProfileId(profile.id);
     }
   } catch (_) {
     // The dashboard has its own loading/error/retry states and will
@@ -1574,7 +1578,17 @@ final dashboardStatsProvider =
 
 final companyProvider = FutureProvider.autoDispose<CompanyModel?>((ref) async {
   final client = ref.read(supabaseProvider);
-  final profile = await ref.read(currentProfileProvider.future);
+  // `ref.watch` (not `ref.read(...future)`) is deliberate: this makes
+  // companyProvider a genuine dependent of currentProfileProvider, so
+  // Riverpod automatically rebuilds it the instant the profile changes —
+  // including switching from one company's admin/supervisor/employee to a
+  // completely different company's user on a fast logout->login. Before
+  // this, companyProvider only captured the profile ONCE and relied on
+  // autoDispose eventually tearing it down between users, which is a race:
+  // if the new dashboard mounted and re-subscribed before that teardown
+  // finished, it could briefly reuse the PREVIOUS company's cached data.
+  final profileAsync = ref.watch(currentProfileProvider);
+  final profile = profileAsync.valueOrNull;
   if (profile?.companyId == null) return null;
   final data = await client
       .from('companies')
