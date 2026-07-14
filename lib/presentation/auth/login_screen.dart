@@ -67,24 +67,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       // NOTE: We deliberately do NOT navigate to '/change-password' here.
       // The router's redirect() is the single source of truth for this
-      // decision (see app_router.dart). Having two places independently
-      // check `mustChangePassword` against a Riverpod FutureProvider that
-      // can briefly serve stale/previous data during a refetch was the
-      // root cause of the "force password change shown twice" bug.
-      // We've already awaited the FRESH profile above, so router redirect
-      // will correctly catch mustChangePassword == true once we hand off
-      // to '/dashboard' below, using that same fresh data.
+      // decision (see app_router.dart).
 
-      // Give the role-specific record (the employees/supervisors row
-      // linked by profile_id) a head start before the dashboard mounts —
-      // see warmRoleSpecificRecord's doc comment. This replaces the old
-      // "route through /splash" indirection: DashboardRouterWidget and
-      // each role's dashboard already show their own loading state via
-      // AsyncValue while this resolves, so there's no need for a separate
-      // screen to gate navigation on it — going straight to /dashboard
-      // is both simpler and faster.
-      await warmRoleSpecificRecord(ref, profile);
-
+      // NOTE: We also don't warm the role-specific record here anymore.
+      // The router's central auth-event listener (see app_router.dart)
+      // already does that in reaction to this exact sign-in event — doing
+      // it here too would just be a second, redundant fetch racing the
+      // first one for no benefit. DashboardRouterWidget and each role's
+      // dashboard already show their own loading state via AsyncValue
+      // while that resolves, so there's nothing left to gate on here.
       if (!mounted) return;
       context.go('/dashboard');
     } catch (e) {

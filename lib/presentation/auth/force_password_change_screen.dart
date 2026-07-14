@@ -74,7 +74,11 @@ class _ForcePasswordChangeScreenState
       // doc comment — this replaces the old '/splash' indirection).
       passwordChangeInProgress = false;
 
-      await warmRoleSpecificRecord(ref, ref.read(currentProfileProvider).valueOrNull);
+      await warmRoleSpecificRecord(
+        ref.read(employeeRepositoryProvider),
+        ref.read(supervisorRepositoryProvider),
+        ref.read(currentProfileProvider).valueOrNull,
+      );
 
       if (mounted) context.go('/dashboard');
     } catch (e) {
