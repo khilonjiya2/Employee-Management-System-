@@ -83,23 +83,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     final myGeneration = ++authEventGeneration;
 
     if (data.event == AuthChangeEvent.signedOut) {
-      ref.invalidate(currentProfileProvider);
+      ref.invalidate(sessionContextProvider);
       return;
     }
 
     if (data.event == AuthChangeEvent.signedIn) {
-      ref.invalidate(currentProfileProvider);
+      ref.invalidate(sessionContextProvider);
       try {
-        final profile = await ref.read(currentProfileProvider.future);
+        // sessionContextProvider's single RPC call already includes the
+        // role-specific record (employee/supervisor row) and company —
+        // there's nothing left to separately "warm up" the way there used
+        // to be with three sequential queries. Just awaiting it here is
+        // enough to have everything ready before the dashboard needs it.
+        await ref.read(currentProfileProvider.future);
         // A newer auth event (e.g. a fast sign-out right after this
-        // sign-in) has already superseded this one — don't act on data
-        // that no longer reflects who's actually signed in.
+        // sign-in) has already superseded this one — nothing further to
+        // do; DashboardRouterWidget reacts to the state directly anyway.
         if (myGeneration != authEventGeneration) return;
-        await warmRoleSpecificRecord(
-          ref.read(employeeRepositoryProvider),
-          ref.read(supervisorRepositoryProvider),
-          profile,
-        );
       } catch (_) {
         // The dashboard has its own loading/error/retry states (see
         // DashboardRouterWidget and AutoRetryLoader) and will pick this up
@@ -444,7 +444,7 @@ class DashboardRouterWidget extends ConsumerWidget {
       // silently until it resolves.
       error: (e, _) => Scaffold(
         body: AutoRetryLoader(
-          onRetry: () => ref.invalidate(currentProfileProvider),
+          onRetry: () => ref.invalidate(sessionContextProvider),
         ),
       ),
       data: (profile) {
