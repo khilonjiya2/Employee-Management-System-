@@ -70,9 +70,14 @@ class ProfileModel extends Equatable {
         id,
         role,
         companyId,
+        employeeCode,
         fullName,
+        mobile,
+        profilePhotoUrl,
         isActive,
         mustChangePassword,
+        updatedAt,
+        gender,
       ];
 }
 
@@ -220,7 +225,28 @@ class EmployeeModel extends Equatable {
   );
 
   @override
-  List<Object?> get props => [id, employeeCode, name, status];
+  List<Object?> get props => [
+        id,
+        profileId,
+        employeeCode,
+        name,
+        mobile,
+        address,
+        aadhaarNumber,
+        joiningDate,
+        departmentId,
+        locationId,
+        designation,
+        dailyWageRate,
+        employeePhotoUrl,
+        status,
+        upiId,
+        bankAccountNumber,
+        bankIfsc,
+        bankName,
+        updatedAt,
+        gender,
+      ];
 }
 
 // REPLACE the entire SupervisorModel class in app_models.dart with this:
@@ -306,7 +332,24 @@ class SupervisorModel extends Equatable {
   bool get hasUpi => upiId != null && upiId!.trim().isNotEmpty;
 
   @override
-  List<Object?> get props => [id, supervisorCode, email, isActive];
+  List<Object?> get props => [
+        id,
+        profileId,
+        supervisorCode,
+        name,
+        email,
+        mobile,
+        assignedArea,
+        profilePhotoUrl,
+        isActive,
+        upiId,
+        bankAccountNumber,
+        bankIfsc,
+        bankName,
+        monthlySalary,
+        updatedAt,
+        gender,
+      ];
 }
 class AttendanceModel extends Equatable {
   final String id;
