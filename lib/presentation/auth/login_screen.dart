@@ -47,8 +47,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       await auth.signInWithEmail(email, _passwordController.text);
 
-      // Invalidate and wait for fresh profile
-      ref.invalidate(currentProfileProvider);
+      // Invalidate the SOURCE provider — currentProfileProvider just
+      // derives from sessionContextProvider now (see auth_repository.dart),
+      // so invalidating currentProfileProvider alone wouldn't force a
+      // refetch; this is what actually triggers a fresh combined fetch.
+      ref.invalidate(sessionContextProvider);
       final profile = await ref.read(currentProfileProvider.future);
 
       if (!mounted) return;

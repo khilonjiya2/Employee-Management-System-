@@ -65,20 +65,18 @@ class _ForcePasswordChangeScreenState
 
       _completed = true;
 
-      // Step 4: Refresh profile cache to pick up must_change_password=false.
-      ref.invalidate(currentProfileProvider);
+      // Step 4: Refresh the underlying session context to pick up
+      // must_change_password=false — invalidating currentProfileProvider
+      // alone wouldn't do anything now that it just derives from
+      // sessionContextProvider (see auth_repository.dart).
+      ref.invalidate(sessionContextProvider);
       await ref.read(currentProfileProvider.future);
 
-      // Step 5: Release the lock and warm the role-specific record before
-      // handing off to '/dashboard' directly (see warmRoleSpecificRecord's
-      // doc comment — this replaces the old '/splash' indirection).
+      // Step 5: Release the lock and hand off to '/dashboard' directly.
+      // The await above already fetched profile + role record + company
+      // together via sessionContextProvider, so there's nothing left to
+      // separately warm up here.
       passwordChangeInProgress = false;
-
-      await warmRoleSpecificRecord(
-        ref.read(employeeRepositoryProvider),
-        ref.read(supervisorRepositoryProvider),
-        ref.read(currentProfileProvider).valueOrNull,
-      );
 
       if (mounted) context.go('/dashboard');
     } catch (e) {
