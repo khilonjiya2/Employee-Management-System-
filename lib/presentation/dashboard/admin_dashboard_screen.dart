@@ -599,24 +599,31 @@ final _supervisorDashboardStatsProvider =
 
   final client = ref.read(supabaseProvider);
 
-  // Retry this lookup — same reasoning as EmployeeRepository.getByProfileId:
-  // right after a login (especially a fast logout->login as a different
-  // user), this can transiently race RLS/JWT context propagation and come
-  // back null even though the row genuinely exists, which used to make the
-  // dashboard silently show all-zero stats until manually refreshed. A
-  // null result here isn't a thrown error, so retry on the value itself.
-  Map<String, dynamic>? sup;
-  for (var attempt = 0; attempt < 4; attempt++) {
-    sup = await client
-        .from('supervisors')
-        .select('id')
-        .eq('profile_id', profileId)
-        .maybeSingle();
-    if (sup != null) break;
-    if (attempt < 3) await Future.delayed(const Duration(milliseconds: 300));
+  // Reuses the supervisor row already fetched as part of the single
+  // combined login fetch (see sessionContextProvider in
+  // auth_repository.dart) instead of running a separate query with its
+  // own retry loop for the same "row not committed yet" race. Falls back
+  // to a direct lookup only if that combined fetch didn't have it for
+  // some reason, so this stays just as reliable, just faster on the
+  // normal path.
+  final ctx = await ref.watch(sessionContextProvider.future);
+  String? supervisorId = ctx?.supervisor?.id;
+  if (supervisorId == null) {
+    for (var attempt = 0; attempt < 4; attempt++) {
+      final sup = await client
+          .from('supervisors')
+          .select('id')
+          .eq('profile_id', profileId)
+          .maybeSingle();
+      if (sup != null) {
+        supervisorId = sup['id'] as String;
+        break;
+      }
+      if (attempt < 3) await Future.delayed(const Duration(milliseconds: 300));
+    }
   }
 
-  if (sup == null) {
+  if (supervisorId == null) {
     return {
       'total_employees': 0,
       'today_submitted': false,
@@ -624,8 +631,6 @@ final _supervisorDashboardStatsProvider =
       'approved_today': 0.0,
     };
   }
-
-  final supervisorId = sup['id'] as String;
 
   final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
   final now = DateTime.now();
@@ -720,6 +725,12 @@ class _SupervisorDashboardScreenState
 
   void _refresh() {
     final profileId = ref.read(currentProfileProvider).valueOrNull?.id;
+    // _supervisorDashboardStatsProvider now reads the supervisor record via
+    // sessionContextProvider — invalidating just the stats provider alone
+    // would still see the same cached session context, so this needs
+    // invalidating too for a real refetch (e.g. after this supervisor's own
+    // photo was just updated in Settings).
+    ref.invalidate(sessionContextProvider);
     ref.invalidate(_supervisorDashboardStatsProvider(profileId));
     ref.invalidate(_unreadNotificationCountProvider);
   }

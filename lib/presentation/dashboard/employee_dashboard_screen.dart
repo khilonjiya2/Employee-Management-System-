@@ -11,9 +11,16 @@ import '../shared/widgets.dart' as w;
 
 final _employeeOwnRecordProvider =
     FutureProvider.autoDispose<EmployeeModel?>((ref) async {
-  final profile = ref.watch(currentProfileProvider).valueOrNull;
-  if (profile == null) return null;
-  return ref.read(employeeRepositoryProvider).getByProfileId(profile.id);
+  // Uses the same single combined fetch as login (see sessionContextProvider
+  // in auth_repository.dart) instead of a separate profile_id lookup — one
+  // less round trip in the common case. Falls back to a direct query only
+  // if the combined fetch came back without an employee row attached (e.g.
+  // a genuinely brand-new account), so this stays just as reliable as
+  // before, just faster on the normal path.
+  final ctx = await ref.watch(sessionContextProvider.future);
+  if (ctx?.profile == null) return null;
+  if (ctx!.employee != null) return ctx.employee;
+  return ref.read(employeeRepositoryProvider).getByProfileId(ctx.profile.id);
 });
 
 final _employeeOwnAttendanceProvider = FutureProvider.autoDispose
@@ -133,10 +140,16 @@ class _EmployeeDashboardBody extends ConsumerStatefulWidget {
 
 class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> {
   Future<void> _refresh() async {
+    // Previously this refreshed attendance/payroll/notifications but never
+    // the employee record itself, so pull-to-refresh couldn't pick up a
+    // freshly uploaded photo (or any other profile edit) even as a manual
+    // fallback.
+    ref.invalidate(sessionContextProvider);
     ref.invalidate(_employeeOwnAttendanceProvider(widget.employee.id));
     ref.invalidate(_employeeOwnPayrollProvider(widget.employee.id));
     ref.invalidate(_employeeUnreadNotificationsProvider);
     await Future.wait([
+      ref.read(_employeeOwnRecordProvider.future),
       ref.read(_employeeOwnAttendanceProvider(widget.employee.id).future),
       ref.read(_employeeOwnPayrollProvider(widget.employee.id).future),
     ]);
