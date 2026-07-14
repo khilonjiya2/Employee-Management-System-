@@ -15,7 +15,30 @@ final authStateChangesProvider = StreamProvider<AuthState>((ref) {
   return Supabase.instance.client.auth.onAuthStateChange;
 });
 
-final currentProfileProvider = FutureProvider<ProfileModel?>((ref) async {
+/// Everything the app needs right after login, fetched in ONE network
+/// round trip via the get_my_session_context RPC (see
+/// supabase_migration_session_and_photo.sql) instead of several sequential
+/// queries (profile, then — once the role is known — the employee/
+/// supervisor row, then the company row), each with its own retry loop.
+/// That serialized chain was a real, measurable chunk of how slow login
+/// felt, especially on a fast logout->login where every one of those
+/// retry loops could be hit at once. currentProfileProvider,
+/// companyProvider, and the employee/supervisor "own record" providers
+/// all now derive from this single cached fetch.
+class SessionContext {
+  final ProfileModel profile;
+  final EmployeeModel? employee;
+  final SupervisorModel? supervisor;
+  final CompanyModel? company;
+  const SessionContext({
+    required this.profile,
+    this.employee,
+    this.supervisor,
+    this.company,
+  });
+}
+
+final sessionContextProvider = FutureProvider<SessionContext?>((ref) async {
   final client = ref.read(supabaseProvider);
 
   // THE COLD-START BUG: on a fresh app launch with an already-persisted
@@ -23,16 +46,8 @@ final currentProfileProvider = FutureProvider<ProfileModel?>((ref) async {
   // asynchronously. `client.auth.currentSession` (which the router's
   // redirect() reads to decide whether to let you into /dashboard) can go
   // non-null a moment before `client.auth.currentUser` finishes hydrating.
-  // The old code did `if (user == null) return null;` right here — a
-  // single synchronous check — so it lost that race, returned null, and
-  // because this is a plain (non-autoDispose) FutureProvider it NEVER ran
-  // again. Every screen downstream reads `profile?.role` / `profile?.id`
-  // off that permanently-cached null, which is exactly why the dashboard
-  // came up broken/wrong on first launch but fine after a restart (by then
-  // the SDK is already warm, so currentUser is populated instantly).
-  //
-  // Fix: actively wait for currentUser to appear (bounded), instead of
-  // giving up on the first synchronous read.
+  // Actively wait for currentUser to appear (bounded) instead of giving up
+  // on the first synchronous read.
   var user = client.auth.currentUser;
   if (user == null) {
     for (var attempt = 0; attempt < 10 && user == null; attempt++) {
@@ -45,24 +60,41 @@ final currentProfileProvider = FutureProvider<ProfileModel?>((ref) async {
   if (user == null) return null;
 
   // A brand new account is created via an edge function that creates the
-  // auth user and the linked profiles row in quick succession. If a first
-  // login races that write, one immediate query can come back empty and
-  // the user sees a blank screen even though the account is valid. Retry
-  // briefly before giving up so first login is reliable. This also
-  // absorbs any lingering cold-start network/RLS-token propagation delay.
+  // auth user and the linked profiles (and employees/supervisors) rows in
+  // quick succession. If a first login races that write, one immediate
+  // call can come back empty and the user would see a blank screen even
+  // though the account is valid. Retry briefly before giving up so first
+  // login is reliable. Because this one RPC already returns the profile
+  // AND the role-specific record together, this single retry loop covers
+  // both — no separate retry chain needed for the role record anymore.
   for (var attempt = 0; attempt < 6; attempt++) {
     try {
-      final data = await client
-          .from('profiles')
-          .select()
-          .eq('id', user.id)
-          .maybeSingle();
-      if (data != null) {
-        return ProfileModel.fromJson(data);
+      final result = await client.rpc('get_my_session_context');
+      if (result != null) {
+        final data = result as Map<String, dynamic>;
+        final profile = ProfileModel.fromJson(data['profile'] as Map<String, dynamic>);
+        EmployeeModel? employee;
+        SupervisorModel? supervisor;
+        final roleRecord = data['role_record'] as Map<String, dynamic>?;
+        if (roleRecord != null) {
+          if (profile.role == 'employee') {
+            employee = EmployeeModel.fromJson(roleRecord);
+          } else if (profile.role == 'supervisor') {
+            supervisor = SupervisorModel.fromJson(roleRecord);
+          }
+        }
+        final companyJson = data['company'] as Map<String, dynamic>?;
+        final company = companyJson != null ? CompanyModel.fromJson(companyJson) : null;
+        return SessionContext(
+          profile: profile,
+          employee: employee,
+          supervisor: supervisor,
+          company: company,
+        );
       }
     } catch (_) {
       // Transient network/RLS hiccup right after cold start — swallow and
-      // retry rather than permanently caching a null profile.
+      // retry rather than permanently caching a null result.
     }
     if (attempt < 5) {
       await Future.delayed(Duration(milliseconds: 300 * (attempt + 1)));
@@ -71,41 +103,15 @@ final currentProfileProvider = FutureProvider<ProfileModel?>((ref) async {
   return null;
 });
 
+final currentProfileProvider = FutureProvider<ProfileModel?>((ref) async {
+  final ctx = await ref.watch(sessionContextProvider.future);
+  return ctx?.profile;
+});
+
 final currentUserRoleProvider = Provider<String>((ref) {
   final profile = ref.watch(currentProfileProvider);
   return profile.valueOrNull?.role ?? 'supervisor';
 });
-
-/// Prefetches the role-specific record (the `employees` or `supervisors`
-/// row linked to a profile via profile_id) right after a successful
-/// login or forced password change, so it's already warmed in cache by
-/// the time the dashboard mounts. This used to be SplashScreen's job —
-/// login and password-change routed through '/splash' specifically to
-/// get this warm-up before entering '/dashboard'. Now the dashboards
-/// themselves (DashboardRouterWidget and each role's screen) already show
-/// a proper loading state via AsyncValue while their own data resolves,
-/// so a separate splash gate is no longer needed; this just gives that
-/// first fetch a head start rather than leaving it as the dashboard's own
-/// first (and, right after a fast logout/login, occasionally losing)
-/// attempt. Best-effort only — never throws, and never blocks navigation
-/// on success or failure.
-Future<void> warmRoleSpecificRecord(
-  EmployeeRepository employeeRepo,
-  SupervisorRepository supervisorRepo,
-  ProfileModel? profile,
-) async {
-  if (profile == null) return;
-  try {
-    if (profile.role == 'employee') {
-      await employeeRepo.getByProfileId(profile.id);
-    } else if (profile.role == 'supervisor') {
-      await supervisorRepo.getByProfileId(profile.id);
-    }
-  } catch (_) {
-    // The dashboard has its own loading/error/retry states and will
-    // fetch this again itself if this warm-up attempt didn't succeed.
-  }
-}
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(ref.watch(supabaseProvider));
@@ -1577,26 +1583,13 @@ final dashboardStatsProvider =
 // Add at bottom of auth_repository.dart (after dashboardStatsProvider)
 
 final companyProvider = FutureProvider.autoDispose<CompanyModel?>((ref) async {
-  final client = ref.read(supabaseProvider);
-  // `ref.watch` (not `ref.read(...future)`) is deliberate: this makes
-  // companyProvider a genuine dependent of currentProfileProvider, so
-  // Riverpod automatically rebuilds it the instant the profile changes —
-  // including switching from one company's admin/supervisor/employee to a
-  // completely different company's user on a fast logout->login. Before
-  // this, companyProvider only captured the profile ONCE and relied on
-  // autoDispose eventually tearing it down between users, which is a race:
-  // if the new dashboard mounted and re-subscribed before that teardown
-  // finished, it could briefly reuse the PREVIOUS company's cached data.
-  final profileAsync = ref.watch(currentProfileProvider);
-  final profile = profileAsync.valueOrNull;
-  if (profile?.companyId == null) return null;
-  final data = await client
-      .from('companies')
-      .select()
-      .eq('id', profile!.companyId!)
-      .maybeSingle();
-  if (data == null) return null;
-  return CompanyModel.fromJson(data);
+  // Derives from the same single combined fetch as currentProfileProvider
+  // (see sessionContextProvider) instead of running its own separate
+  // company query — one less round trip, and `ref.watch` here means it
+  // automatically stays in sync with whichever user/company is currently
+  // signed in, including switching companies on a fast logout->login.
+  final ctx = await ref.watch(sessionContextProvider.future);
+  return ctx?.company;
 });
 
 final paymentModuleEnabledProvider = Provider<bool>((ref) {
