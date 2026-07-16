@@ -631,6 +631,12 @@ final _supervisorDashboardStatsProvider =
       'approved_today': 0.0,
     };
   }
+  // Dart doesn't promote a reassignable (non-final) local's nullability
+  // through the null check above once it's captured inside the
+  // withRetry(() => ...) closure below — bind it to a genuinely
+  // non-nullable final so every .eq('supervisor_id', ...) call type-checks
+  // as String instead of String?.
+  final resolvedSupervisorId = supervisorId;
 
   final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
   final now = DateTime.now();
@@ -638,24 +644,24 @@ final _supervisorDashboardStatsProvider =
   final monthEnd = DateFormat('yyyy-MM-dd').format(DateTime(now.year, now.month + 1, 0));
 
   final results = await withRetry(() => Future.wait<dynamic>([
-        client.from('supervisor_employees').select('id').eq('supervisor_id', supervisorId) as Future<dynamic>,
+        client.from('supervisor_employees').select('id').eq('supervisor_id', resolvedSupervisorId) as Future<dynamic>,
         client
             .from('attendance')
             .select('id')
-            .eq('supervisor_id', supervisorId)
+            .eq('supervisor_id', resolvedSupervisorId)
             .eq('attendance_date', today)
             .maybeSingle() as Future<dynamic>,
         client
             .from('expenses')
             .select('id, amount')
-            .eq('supervisor_id', supervisorId)
+            .eq('supervisor_id', resolvedSupervisorId)
             .gte('expense_date', monthStart)
             .lte('expense_date', monthEnd)
             .eq('status', 'pending') as Future<dynamic>,
         client
             .from('expenses')
             .select('id, amount')
-            .eq('supervisor_id', supervisorId)
+            .eq('supervisor_id', resolvedSupervisorId)
             .gte('expense_date', monthStart)
             .lte('expense_date', monthEnd)
             .eq('status', 'approved') as Future<dynamic>,
@@ -670,7 +676,7 @@ final _supervisorDashboardStatsProvider =
       0, (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0));
 
   return {
-    'supervisor_id': supervisorId,
+    'supervisor_id': resolvedSupervisorId,
     'total_employees': (employees as List).length,
     'today_submitted': todayAtt != null,
     'pending_today': sumAmount(pendingThisMonth as List),
