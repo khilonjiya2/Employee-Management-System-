@@ -74,7 +74,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
   String? _locationId;
   String? _supervisorId;
   String _status = 'active';
-  String _gender = 'male';
+  String? _gender;
   File? _photoFile;
   String? _existingPhotoUrl;
   bool _isLoading = false;
@@ -123,7 +123,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
     _departmentId = employee.departmentId;
     _locationId = employee.locationId;
     _status = employee.status;
-    _gender = employee.gender ?? 'male';
+    _gender = employee.gender;
     _existingPhotoUrl = employee.employeePhotoUrl;
     _showBankDetails = (employee.upiId?.isNotEmpty ?? false) ||
         (employee.bankAccountNumber?.isNotEmpty ?? false);
@@ -164,6 +164,15 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_gender == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a gender'),
+          backgroundColor: AppColors.error500,
+        ),
+      );
+      return;
+    }
     setState(() => _isLoading = true);
 
     try {
@@ -247,9 +256,9 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
                 Row(children: [
                   const Icon(Icons.wc_rounded, color: AppColors.secondary400, size: 20),
                   const SizedBox(width: 12),
-                  const Text('Gender', style: TextStyle(fontSize: 13, color: AppColors.secondary600)),
+                  const Text('Gender *', style: TextStyle(fontSize: 13, color: AppColors.secondary600)),
                   const SizedBox(width: 20),
-                  ...['male', 'female', 'other'].map((g) => Padding(
+                  ...['male', 'female'].map((g) => Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: ChoiceChip(
                       label: Text(g[0].toUpperCase() + g.substring(1)),
