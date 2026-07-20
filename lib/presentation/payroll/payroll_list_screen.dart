@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart';
@@ -35,17 +36,51 @@ class _PayrollListScreenState extends ConsumerState<PayrollListScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   late String? _statusFilter;
+  RealtimeChannel? _realtimeSub;
 
   @override
   void initState() {
     super.initState();
     _statusFilter = widget.initialStatusFilter;
     _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _subscribeRealtime());
+  }
+
+  void _subscribeRealtime() {
+    if (!mounted) return;
+    final client = ref.read(supabaseProvider);
+    _realtimeSub = client
+        .channel('payroll_list_changes_${DateTime.now().microsecondsSinceEpoch}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'payroll',
+          callback: (_) {
+            final month = ref.read(selectedPayrollMonthProvider);
+            ref.invalidate(payrollListProvider(month));
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'supervisor_payroll',
+          callback: (_) {
+            final month = ref.read(selectedPayrollMonthProvider);
+            ref.invalidate(supervisorPayrollListProvider(month));
+          },
+        )
+        .subscribe();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    // Guard against a channel that never finished subscribing / was
+    // already torn down — passing null into removeChannel() throws.
+    final sub = _realtimeSub;
+    if (sub != null) {
+      ref.read(supabaseProvider).removeChannel(sub);
+    }
     super.dispose();
   }
 
