@@ -32,7 +32,7 @@ class SupervisorsNotifier
 
   void _subscribeRealtime() {
     _realtimeSub = _client
-        .channel('supervisors_changes_${DateTime.now().microsecondsSinceEpoch}')
+        .channel('supervisors_changes')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -262,7 +262,7 @@ class _SupervisorFormScreenState
   bool _isActive = true;
   bool _isLoading = false;
   bool _showBankDetails = false;
-  String _gender = 'male';
+  String? _gender;
   File? _photoFile;
   String? _existingPhotoUrl;
   List<String> _selectedLocationIds = [];
@@ -319,7 +319,7 @@ class _SupervisorFormScreenState
     _bankNameController.text = sup.bankName ?? '';
     _salaryController.text = sup.monthlySalary.toStringAsFixed(0);
     _isActive = sup.isActive;
-    _gender = sup.gender ?? 'male';
+    _gender = sup.gender;
     _existingPhotoUrl = sup.profilePhotoUrl;
     _showBankDetails =
         sup.hasUpi || (sup.bankAccountNumber?.isNotEmpty ?? false);
@@ -348,6 +348,15 @@ class _SupervisorFormScreenState
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_gender == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a gender'),
+          backgroundColor: AppColors.error500,
+        ),
+      );
+      return;
+    }
     setState(() => _isLoading = true);
 
     try {
@@ -504,9 +513,9 @@ class _SupervisorFormScreenState
               Row(children: [
                 const Icon(Icons.wc_rounded, color: AppColors.secondary400, size: 20),
                 const SizedBox(width: 12),
-                const Text('Gender', style: TextStyle(fontSize: 13, color: AppColors.secondary600)),
+                const Text('Gender *', style: TextStyle(fontSize: 13, color: AppColors.secondary600)),
                 const SizedBox(width: 20),
-                ...['male', 'female', 'other'].map((g) => Padding(
+                ...['male', 'female'].map((g) => Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
                     label: Text(g[0].toUpperCase() + g.substring(1)),
