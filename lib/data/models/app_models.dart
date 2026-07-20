@@ -431,6 +431,8 @@ class AttendanceDetailModel extends Equatable {
   final String employeeId;
   final String? employeeName;
   final String? employeeCode;
+  final String? employeeGender;
+  final String? employeePhotoUrl;
   final String status;
   final double overtimeHours;
   final String? remarks;
@@ -443,6 +445,8 @@ class AttendanceDetailModel extends Equatable {
     required this.employeeId,
     this.employeeName,
     this.employeeCode,
+    this.employeeGender,
+    this.employeePhotoUrl,
     required this.status,
     required this.overtimeHours,
     this.remarks,
@@ -456,6 +460,8 @@ class AttendanceDetailModel extends Equatable {
     employeeId: json['employee_id'] as String,
     employeeName: json['employees'] != null ? (json['employees'] as Map)['name'] as String? : null,
     employeeCode: json['employees'] != null ? (json['employees'] as Map)['employee_code'] as String? : null,
+    employeeGender: json['employees'] != null ? (json['employees'] as Map)['gender'] as String? : null,
+    employeePhotoUrl: json['employees'] != null ? (json['employees'] as Map)['employee_photo_url'] as String? : null,
     status: json['status'] as String,
     overtimeHours: (json['overtime_hours'] as num?)?.toDouble() ?? 0,
     remarks: json['remarks'] as String?,
@@ -474,7 +480,15 @@ class AttendanceDetailModel extends Equatable {
   };
 
   @override
-  List<Object?> get props => [id, employeeId, status];
+  List<Object?> get props => [
+        id,
+        employeeId,
+        status,
+        overtimeHours,
+        remarks,
+        employeeGender,
+        employeePhotoUrl,
+      ];
 }
 
 class ExpenseModel extends Equatable {
