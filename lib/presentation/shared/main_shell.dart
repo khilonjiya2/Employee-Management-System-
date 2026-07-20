@@ -38,8 +38,23 @@ class MainShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(currentProfileProvider).valueOrNull;
-    final role = profile?.role ?? 'supervisor';
+    final profileAsync = ref.watch(currentProfileProvider);
+    final profile = profileAsync.valueOrNull;
+
+    // Previously this defaulted to `?? 'supervisor'` whenever the profile
+    // was still loading, so EVERY login — including admins and
+    // employees — visibly flashed the supervisor nav bar
+    // (Dashboard/Attendance/Expenses/Reports) for a moment before
+    // swapping to the correct one once the real role arrived. Show a
+    // plain loading scaffold with no nav bar at all instead, so nothing
+    // incorrect is ever shown even briefly — the nav only renders once
+    // the role is actually confirmed.
+    if (profile == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    final role = profile.role;
 
     final adminItems = [
       const _NavItem(
