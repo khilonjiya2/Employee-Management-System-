@@ -157,6 +157,8 @@ class _AttendanceReportState extends ConsumerState<_AttendanceReport> {
               'present': 0,
               'absent': 0,
               'supervisor': att.supervisorName ?? '',
+              'employee_photo_url': d.employeePhotoUrl,
+              'gender': d.employeeGender,
             });
         if (d.status == 'present') {
           summary[key]!['present'] = (summary[key]!['present'] as int) + 1;
