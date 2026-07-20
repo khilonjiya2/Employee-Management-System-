@@ -207,7 +207,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         const SizedBox(height: 6),
                         // Gender selector — available to everyone
                         Row(children: [
-                          ...['male', 'female', 'other'].map((g) => Padding(
+                          ...['male', 'female'].map((g) => Padding(
                             padding: const EdgeInsets.only(right: 6),
                             child: GestureDetector(
                               onTap: () async {
@@ -604,6 +604,7 @@ class _LocationsManagerState extends State<_LocationsManager> {
           .read(supabaseProvider)
           .from('locations')
           .select()
+          .order('is_active', ascending: false)
           .order('name');
       setState(() {
         _locations = (data as List).cast<Map<String, dynamic>>();
@@ -670,7 +671,55 @@ class _LocationsManagerState extends State<_LocationsManager> {
     }
   }
 
+  Future<void> _editLocation(BuildContext dialogContext, String id) async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+
+    // Same duplicate-name validation as add — just excluding this
+    // location's own current row from the check.
+    final profile = widget.ref.read(currentProfileProvider).valueOrNull;
+    final companyId = profile?.companyId;
+    final duplicate = _locations.any(
+      (l) => l['id'] != id
+          && (l['name'] as String).toLowerCase() == name.toLowerCase()
+          && (companyId == null || l['company_id'] == companyId),
+    );
+    if (duplicate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('A location named "$name" already exists.'),
+          backgroundColor: AppColors.error500,
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(dialogContext).pop();
+
+    try {
+      await widget.ref.read(supabaseProvider).from('locations').update({
+        'name': name,
+        'address': _addressController.text.trim().isEmpty
+            ? null
+            : _addressController.text.trim(),
+      }).eq('id', id);
+      _nameController.clear();
+      _addressController.clear();
+      if (mounted) _loadLocations();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error updating location: $e'),
+              backgroundColor: AppColors.error500),
+        );
+      }
+    }
+  }
+
   void _showAddLocation() {
+    _nameController.clear();
+    _addressController.clear();
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -696,6 +745,40 @@ class _LocationsManagerState extends State<_LocationsManager> {
           FilledButton(
               onPressed: () => _addLocation(dialogContext),
               child: const Text('Add')),
+        ],
+      ),
+    );
+  }
+
+  void _showEditLocation(Map<String, dynamic> loc) {
+    final id = loc['id'] as String;
+    _nameController.text = loc['name'] as String? ?? '';
+    _addressController.text = loc['address'] as String? ?? '';
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit Location'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Location Name *'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _addressController,
+              decoration: const InputDecoration(labelText: 'Address'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => _editLocation(dialogContext, id),
+              child: const Text('Save')),
         ],
       ),
     );
@@ -736,6 +819,7 @@ class _LocationsManagerState extends State<_LocationsManager> {
                         final loc = _locations[i];
                         final isActive = loc['is_active'] as bool? ?? true;
                         return ListTile(
+                          onTap: () => _showEditLocation(loc),
                           leading: Container(
                             width: 40,
                             height: 40,
@@ -756,11 +840,21 @@ class _LocationsManagerState extends State<_LocationsManager> {
                               ? Text(loc['address'] as String,
                                   style: const TextStyle(fontSize: 12))
                               : null,
-                          trailing: Switch(
-                            value: isActive,
-                            onChanged: (_) =>
-                                _toggleLocation(loc['id'] as String, isActive),
-                            activeColor: AppColors.success500,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 20),
+                                tooltip: 'Edit',
+                                onPressed: () => _showEditLocation(loc),
+                              ),
+                              Switch(
+                                value: isActive,
+                                onChanged: (_) => _toggleLocation(
+                                    loc['id'] as String, isActive),
+                                activeColor: AppColors.success500,
+                              ),
+                            ],
                           ),
                         );
                       },
