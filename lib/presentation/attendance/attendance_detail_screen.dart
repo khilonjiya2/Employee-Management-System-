@@ -218,8 +218,8 @@ class _AttendanceDetailBody extends StatelessWidget {
                           children: [
                             w.GenderAvatar(
                               radius: 22,
-                              photoUrl: null,
-                              gender: null,
+                              photoUrl: d.employeePhotoUrl,
+                              gender: d.employeeGender,
                             ),
                             const SizedBox(width: 12),
                             Expanded(

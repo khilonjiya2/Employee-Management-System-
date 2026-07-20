@@ -145,7 +145,8 @@ void dispose() {
       final employeeData = await client
           .from('employees')
           .select('*, departments(name)')
-          .inFilter('id', employeeIds);
+          .inFilter('id', employeeIds)
+          .eq('status', 'active');
 
       employees = (employeeData as List)
           .map((e) => EmployeeModel.fromJson(e))

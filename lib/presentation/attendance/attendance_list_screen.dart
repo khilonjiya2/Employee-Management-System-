@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../data/models/app_models.dart';
@@ -24,10 +25,30 @@ class AttendanceListNotifier
   final AttendanceRepository _repo;
   final dynamic _client;
   final ProfileModel? _profile;
+  RealtimeChannel? _realtimeSub;
 
   AttendanceListNotifier(this._repo, this._client, this._profile)
       : super(const AsyncLoading()) {
     load();
+    _subscribeRealtime();
+  }
+
+  void _subscribeRealtime() {
+    _realtimeSub = _client
+        .channel('attendance_list_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'attendance',
+          callback: (_) => load(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'attendance_details',
+          callback: (_) => load(),
+        )
+        .subscribe();
   }
 
   Future<void> load({DateTime? from, DateTime? to}) async {
@@ -50,6 +71,17 @@ class AttendanceListNotifier
   }
 
   void refresh() => load();
+
+  @override
+  void dispose() {
+    // Guard against a channel that never finished subscribing / was
+    // already torn down — passing null into removeChannel() throws.
+    final sub = _realtimeSub;
+    if (sub != null) {
+      _client.removeChannel(sub);
+    }
+    super.dispose();
+  }
 }
 
 class AttendanceListScreen extends ConsumerStatefulWidget {
