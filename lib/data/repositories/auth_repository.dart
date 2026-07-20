@@ -689,7 +689,7 @@ class AttendanceRepository {
     int limit = 20,
   }) async {
     var filterQuery = _client.from('attendance').select(
-        '*, supervisors(name), attendance_details(*, employees(name, employee_code))');
+        '*, supervisors(name), attendance_details(*, employees(name, employee_code, gender, employee_photo_url))');
     if (supervisorId != null) {
       filterQuery = filterQuery.eq('supervisor_id', supervisorId);
     }
@@ -713,7 +713,7 @@ class AttendanceRepository {
     final data = await _client
         .from('attendance')
         .select(
-            '*, supervisors(name), attendance_details(*, employees(name, employee_code))')
+            '*, supervisors(name), attendance_details(*, employees(name, employee_code, gender, employee_photo_url))')
         .eq('id', id)
         .maybeSingle();
     if (data == null) return null;
@@ -725,7 +725,7 @@ class AttendanceRepository {
     final data = await _client
         .from('attendance')
         .select(
-            '*, attendance_details(*, employees(name, employee_code))')
+            '*, attendance_details(*, employees(name, employee_code, gender, employee_photo_url))')
         .eq('supervisor_id', supervisorId)
         .eq('attendance_date', today)
         .maybeSingle();
@@ -985,12 +985,40 @@ class ExpenseRepository {
   }
 
   Future<ExpenseModel> update(String id, Map<String, dynamic> data) async {
+    // If the amount is part of this update, capture the OLD amount first
+    // so the wallet can be adjusted by the exact delta afterward. Without
+    // this, editing an expense's amount after submission silently
+    // desyncs supervisor_wallet.total_deducted/balance from reality
+    // forever, since the wallet was only ever deducted once, at
+    // submission time, based on the ORIGINAL amount.
+    double? oldAmount;
+    if (data.containsKey('amount')) {
+      final existing = await _client
+          .from('expenses')
+          .select('amount')
+          .eq('id', id)
+          .maybeSingle();
+      oldAmount = (existing?['amount'] as num?)?.toDouble();
+    }
+
     final result = await _client
         .from('expenses')
         .update(data)
         .eq('id', id)
         .select('*, supervisors(name, gender, profile_photo_url)')
         .single();
+
+    if (oldAmount != null) {
+      final newAmount = (data['amount'] as num).toDouble();
+      if (newAmount != oldAmount) {
+        await _client.rpc('adjust_wallet_on_expense_amount_change', params: {
+          'p_expense_id': id,
+          'p_old_amount': oldAmount,
+          'p_new_amount': newAmount,
+        });
+      }
+    }
+
     return ExpenseModel.fromJson(result);
   }
 
