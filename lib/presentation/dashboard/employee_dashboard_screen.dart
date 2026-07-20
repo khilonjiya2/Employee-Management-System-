@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart';
@@ -139,6 +140,52 @@ class _EmployeeDashboardBody extends ConsumerStatefulWidget {
 }
 
 class _EmployeeDashboardBodyState extends ConsumerState<_EmployeeDashboardBody> {
+  RealtimeChannel? _realtimeSub;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _subscribeRealtime());
+  }
+
+  void _subscribeRealtime() {
+    if (!mounted) return;
+    final client = ref.read(supabaseProvider);
+    final employeeId = widget.employee.id;
+    _realtimeSub = client
+        .channel('employee_own_dashboard_rt_${DateTime.now().microsecondsSinceEpoch}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'attendance_details',
+          callback: (_) => ref.invalidate(_employeeOwnAttendanceProvider(employeeId)),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'payroll',
+          callback: (_) => ref.invalidate(_employeeOwnPayrollProvider(employeeId)),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'employees',
+          callback: (_) => ref.invalidate(sessionContextProvider),
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    // Guard against a channel that never finished subscribing / was
+    // already torn down — passing null into removeChannel() throws.
+    final sub = _realtimeSub;
+    if (sub != null) {
+      ref.read(supabaseProvider).removeChannel(sub);
+    }
+    super.dispose();
+  }
+
   Future<void> _refresh() async {
     // Previously this refreshed attendance/payroll/notifications but never
     // the employee record itself, so pull-to-refresh couldn't pick up a
