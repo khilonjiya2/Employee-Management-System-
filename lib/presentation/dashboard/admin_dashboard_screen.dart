@@ -744,6 +744,11 @@ class _SupervisorDashboardScreenState
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(currentProfileProvider).valueOrNull;
+    // The supervisor's own role-specific record — this is where admin
+    // uploads and creation-time gender actually live, unlike
+    // profiles.profile_photo_url/gender which are never kept in sync.
+    // Watched (not read) so it updates live the instant it changes.
+    final ownSupervisorRecord = ref.watch(sessionContextProvider).valueOrNull?.supervisor;
     final monthLabel = DateFormat('MMMM yyyy').format(DateTime.now());
 
     // Show loading until the profile itself is ready. Once it is, stats are
@@ -809,8 +814,18 @@ class _SupervisorDashboardScreenState
                       children: [
                         w.GenderAvatar(
                           radius: 28,
-                          photoUrl: profile?.profilePhotoUrl,
-                          gender: profile?.gender,
+                          // Reads from the supervisor's OWN role-specific
+                          // record first, not profiles.profile_photo_url /
+                          // profiles.gender — those columns are never kept
+                          // in sync with the supervisors table, which is
+                          // where admin-uploaded photos and the gender
+                          // chosen at creation time actually get written.
+                          // Reading from profiles here is exactly why a
+                          // photo an admin uploaded for this supervisor —
+                          // or the gender picked when they were created —
+                          // never showed up on their own dashboard.
+                          photoUrl: ownSupervisorRecord?.profilePhotoUrl ?? profile?.profilePhotoUrl,
+                          gender: ownSupervisorRecord?.gender ?? profile?.gender,
                         ),
                         const SizedBox(width: 14),
                         Expanded(
