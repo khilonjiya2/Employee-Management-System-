@@ -175,7 +175,7 @@ class AuthRepository {
           'user_id': user.id,
           'token': token,
           'platform': platform,
-          'updated_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         },
         onConflict: 'token',
       );
@@ -599,7 +599,7 @@ class SupervisorRepository {
   Future<SupervisorModel> update(String id, Map<String, dynamic> data) async {
     final result = await _client
         .from('supervisors')
-        .update({...data, 'updated_at': DateTime.now().toIso8601String()})
+        .update({...data, 'updated_at': DateTime.now().toUtc().toIso8601String()})
         .eq('id', id)
         .select()
         .single();
@@ -851,7 +851,7 @@ class AttendanceRepository {
     await _client.from('attendance').update({
       'is_approved': true,
       'approved_by': adminId,
-      'approved_at': DateTime.now().toIso8601String(),
+      'approved_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', attendanceId);
 
     if (att != null) {
@@ -1083,7 +1083,7 @@ class ExpenseRepository {
     await _client.from('expenses').update({
       'status': 'approved',
       'reviewed_by': adminId,
-      'reviewed_at': DateTime.now().toIso8601String(),
+      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
       'admin_remarks': remarks,
     }).eq('id', id);
 
@@ -1112,7 +1112,7 @@ class ExpenseRepository {
     await _client.from('expenses').update({
       'status': 'rejected',
       'reviewed_by': adminId,
-      'reviewed_at': DateTime.now().toIso8601String(),
+      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
       'admin_remarks': remarks,
     }).eq('id', id);
 
@@ -1428,7 +1428,7 @@ class PayrollRepository {
       if (wasAlreadyPaid) 'utr_reference': existing['utr_reference'],
       if (wasAlreadyPaid) 'payment_method': existing['payment_method'],
       'processed_by': _client.auth.currentUser?.id,
-      'processed_at': DateTime.now().toIso8601String(),
+      'processed_at': DateTime.now().toUtc().toIso8601String(),
     };
 
     final result = await _client
@@ -1454,7 +1454,7 @@ class PayrollRepository {
   Future<void> markAsPaid(String id) async {
     await _client.from('payroll').update({
       'status': 'paid',
-      'paid_at': DateTime.now().toIso8601String(),
+      'paid_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', id);
   }
 
@@ -1465,8 +1465,8 @@ class PayrollRepository {
       'payment_status': 'paid',
       'payment_method': 'upi',
       'utr_reference': utrReference,
-      'paid_at': DateTime.now().toIso8601String(),
-      'payment_confirmed_at': DateTime.now().toIso8601String(),
+      'paid_at': DateTime.now().toUtc().toIso8601String(),
+      'payment_confirmed_at': DateTime.now().toUtc().toIso8601String(),
       'payment_confirmed_by': _client.auth.currentUser?.id,
     }).eq('id', id);
   }
@@ -1538,7 +1538,7 @@ class PaymentRepository {
       'payment_status': paymentStatus,
       'utr_reference': utrReference,
       'initiated_by': _client.auth.currentUser?.id,
-      'confirmed_at': paymentStatus == 'paid' ? DateTime.now().toIso8601String() : null,
+      'confirmed_at': paymentStatus == 'paid' ? DateTime.now().toUtc().toIso8601String() : null,
       'confirmed_by': paymentStatus == 'paid' ? _client.auth.currentUser?.id : null,
       'remarks': remarks,
     });
@@ -1559,7 +1559,7 @@ class PaymentRepository {
       'payment_status': 'paid',
       'payment_method': 'upi',
       'utr_reference': utrReference,
-      'payment_confirmed_at': DateTime.now().toIso8601String(),
+      'payment_confirmed_at': DateTime.now().toUtc().toIso8601String(),
       'payment_confirmed_by': _client.auth.currentUser?.id,
     }).eq('id', expenseId);
   }
@@ -1752,7 +1752,7 @@ class SupervisorPayrollRepository {
           'net_amount': net,
           'status': 'processed',
           'processed_by': _client.auth.currentUser?.id,
-          'processed_at': DateTime.now().toIso8601String(),
+          'processed_at': DateTime.now().toUtc().toIso8601String(),
           'remarks': remarks,
         }, onConflict: 'supervisor_id,payroll_month,payroll_year')
         .select()
@@ -1766,8 +1766,8 @@ class SupervisorPayrollRepository {
       'payment_status': 'paid',
       'payment_method': 'upi',
       'utr_reference': utrReference,
-      'paid_at': DateTime.now().toIso8601String(),
-      'payment_confirmed_at': DateTime.now().toIso8601String(),
+      'paid_at': DateTime.now().toUtc().toIso8601String(),
+      'payment_confirmed_at': DateTime.now().toUtc().toIso8601String(),
       'payment_confirmed_by': _client.auth.currentUser?.id,
     }).eq('id', id);
   }
@@ -1777,7 +1777,7 @@ class SupervisorPayrollRepository {
       'status': 'paid',
       'payment_status': 'paid',
       'payment_method': 'cash',
-      'paid_at': DateTime.now().toIso8601String(),
+      'paid_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', id);
   }
 
