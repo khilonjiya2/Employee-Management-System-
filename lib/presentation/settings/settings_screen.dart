@@ -126,6 +126,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(currentProfileProvider).valueOrNull;
+    // Same reasoning as the supervisor dashboard fix: this person's own
+    // gender/photo actually live on their employees/supervisors row, not
+    // on profiles (which is never kept in sync with those tables). Admins
+    // have no such row, so they naturally fall back to profile data.
+    final ownSessionCtx = ref.watch(sessionContextProvider).valueOrNull;
+    final ownPhotoUrl = ownSessionCtx?.employee?.employeePhotoUrl ??
+        ownSessionCtx?.supervisor?.profilePhotoUrl ??
+        profile?.profilePhotoUrl;
+    final ownGender = ownSessionCtx?.employee?.gender ??
+        ownSessionCtx?.supervisor?.gender ??
+        profile?.gender;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -155,8 +166,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               )
                             : w.GenderAvatar(
                                 radius: 32,
-                                photoUrl: profile?.profilePhotoUrl,
-                                gender: profile?.gender,
+                                photoUrl: ownPhotoUrl,
+                                gender: ownGender,
                                 isAdmin: profile?.role == 'admin',
                               ),
                         if (_isUploadingPhoto)
