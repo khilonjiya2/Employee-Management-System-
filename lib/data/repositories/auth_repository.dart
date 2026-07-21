@@ -1866,6 +1866,21 @@ class WalletRepository {
     });
   }
 
+  /// Edits the amount of a supervisor's MOST RECENT advance only — the
+  /// server-side function re-verifies this is actually the latest advance
+  /// and re-checks admin role itself, so this isn't just a client-side
+  /// convention. The wallet's balance/total_advanced are adjusted by the
+  /// difference automatically as part of the same RPC call.
+  Future<void> editLatestAdvance({
+    required String advanceId,
+    required double newAmount,
+  }) async {
+    await _client.rpc('edit_latest_supervisor_advance', params: {
+      'p_advance_id': advanceId,
+      'p_new_amount': newAmount,
+    });
+  }
+
   Future<List<AdvancePaymentModel>> getAdvanceLogs({String? supervisorId}) async {
     var q = _client
         .from('supervisor_advances')
