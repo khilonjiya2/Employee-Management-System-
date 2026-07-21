@@ -317,6 +317,25 @@ class _SupervisorWalletScreenState
     );
   }
 
+  void _showEditAdvance(Map<String, dynamic> latestAdvanceEntry) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _EditAdvanceSheet(
+        advanceId: latestAdvanceEntry['id'] as String,
+        currentAmount: (latestAdvanceEntry['amount'] as num).toDouble(),
+        supervisorName: widget.supervisorName,
+        onSuccess: () {
+          ref.invalidate(supervisorWalletProvider(widget.supervisorId));
+          ref.invalidate(_walletLedgerProvider(widget.supervisorId));
+          ref.invalidate(supervisorWalletsProvider);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final walletAsync =
@@ -388,7 +407,21 @@ class _SupervisorWalletScreenState
                                     color: AppColors.secondary400)))))
                 : SliverList(
                     delegate: SliverChildBuilderDelegate(
-                      (ctx, i) => _LedgerTile(entry: ledger[i]),
+                      (ctx, i) {
+                        // Ledger is sorted newest-first, so the first
+                        // 'advance' entry encountered is the latest one —
+                        // the only one the backend will actually let an
+                        // admin edit.
+                        final isLatestAdvance = ledger[i]['type'] == 'advance' &&
+                            ledger.indexWhere((e) => e['type'] == 'advance') == i;
+                        return _LedgerTile(
+                          entry: ledger[i],
+                          canEdit: isAdmin && isLatestAdvance,
+                          onEdit: isAdmin && isLatestAdvance
+                              ? () => _showEditAdvance(ledger[i])
+                              : null,
+                        );
+                      },
                       childCount: ledger.length,
                     ),
                   ),
@@ -526,7 +559,126 @@ class _AddAdvanceSheetState extends ConsumerState<_AddAdvanceSheet> {
   }
 }
 
-// ── Balance Summary Card ──────────────────────────────────────────────────
+// ── Edit (Latest) Advance Bottom Sheet ────────────────────────────────────
+
+class _EditAdvanceSheet extends ConsumerStatefulWidget {
+  final String advanceId;
+  final double currentAmount;
+  final String? supervisorName;
+  final VoidCallback onSuccess;
+  const _EditAdvanceSheet({
+    required this.advanceId,
+    required this.currentAmount,
+    this.supervisorName,
+    required this.onSuccess,
+  });
+
+  @override
+  ConsumerState<_EditAdvanceSheet> createState() => _EditAdvanceSheetState();
+}
+
+class _EditAdvanceSheetState extends ConsumerState<_EditAdvanceSheet> {
+  late final _amountController =
+      TextEditingController(text: widget.currentAmount.toStringAsFixed(0));
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final newAmount = double.tryParse(_amountController.text.trim());
+    if (newAmount == null || newAmount < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a valid amount')));
+      return;
+    }
+    if (newAmount == widget.currentAmount) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await ref.read(walletRepositoryProvider).editLatestAdvance(
+            advanceId: widget.advanceId,
+            newAmount: newAmount,
+          );
+      widget.onSuccess();
+      if (mounted) {
+        Navigator.of(context).pop();
+        final delta = newAmount - widget.currentAmount;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Advance updated — balance ${delta >= 0 ? "increased" : "decreased"} by ${AppUtils.CurrencyUtils.format(delta.abs())}'),
+          backgroundColor: AppColors.success500,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error: $e'), backgroundColor: AppColors.error500));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 32),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+                color: AppColors.secondary300,
+                borderRadius: BorderRadius.circular(2))),
+        const SizedBox(height: 20),
+        Text('Edit Latest Advance - ${widget.supervisorName ?? ""}',
+            style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Inter')),
+        const SizedBox(height: 8),
+        Text(
+          'Current: ${AppUtils.CurrencyUtils.format(widget.currentAmount)}. The wallet balance will adjust automatically by the difference.',
+          style: const TextStyle(fontSize: 12, color: AppColors.secondary500),
+        ),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _amountController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: 'New Amount *',
+            prefixIcon: const Icon(Icons.currency_rupee_rounded),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: _loading ? null : _submit,
+            child: _loading
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Text('Save Changes'),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+
 
 class _BalanceSummaryCard extends StatelessWidget {
   final SupervisorWalletModel? wallet;
@@ -611,7 +763,9 @@ class _MiniStat extends StatelessWidget {
 
 class _LedgerTile extends StatelessWidget {
   final Map<String, dynamic> entry;
-  const _LedgerTile({required this.entry});
+  final bool canEdit;
+  final VoidCallback? onEdit;
+  const _LedgerTile({required this.entry, this.canEdit = false, this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -655,7 +809,9 @@ class _LedgerTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.secondary200),
+        border: Border.all(
+            color: canEdit ? AppColors.primary200 : AppColors.secondary200,
+            width: canEdit ? 1.4 : 1),
       ),
       child: Row(children: [
         Container(
@@ -676,7 +832,7 @@ class _LedgerTile extends StatelessWidget {
                       fontWeight: FontWeight.w600, fontSize: 13)),
               const SizedBox(height: 2),
               Text(
-                '${isAdvance ? "Advance" : "Expense"} - ${AppUtils.DateUtils.formatDate(date)} - ${status.toUpperCase()}',
+                '${isAdvance ? "Advance" : "Expense"} - ${AppUtils.DateUtils.formatDate(date)} - ${status.toUpperCase()}${canEdit ? " - LATEST" : ""}',
                 style: const TextStyle(
                     fontSize: 11, color: AppColors.secondary400),
               ),
@@ -689,6 +845,16 @@ class _LedgerTile extends StatelessWidget {
               fontSize: 14,
               fontFamily: 'Inter'),
         ),
+        if (canEdit) ...[
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            color: AppColors.primary500,
+            tooltip: 'Edit this advance',
+            onPressed: onEdit,
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
       ]),
     );
   }
