@@ -321,6 +321,27 @@ class EmployeeRepository {
       throw Exception(responseData?['error'] ?? 'Failed to create employee login');
     }
     final result = await getById(employeeId);
+
+    // Defensive sync: this app's create-supervisor edge function was
+    // found to silently drop gender entirely when creating the linked
+    // profiles row (see SupervisorRepository.create()'s fix). We don't
+    // have create-employee-login's source to know whether it has the
+    // same gap, so rather than assume it's fine, explicitly copy this
+    // employee's already-correct gender (set via create_employee's
+    // p_gender) onto their new profiles row here too.
+    if (result?.gender != null && result?.profileId != null) {
+      try {
+        await _client
+            .from('profiles')
+            .update({'gender': result!.gender})
+            .eq('id', result.profileId!);
+      } catch (_) {
+        // Best-effort — the employee's own dashboard/lists read gender
+        // from the employees table directly regardless, so this isn't
+        // fatal if it fails.
+      }
+    }
+
     return result!;
   }
 
@@ -367,6 +388,19 @@ class EmployeeRepository {
           // rather than surfacing it as a failed update.
           if (e.code != '23505') rethrow;
         }
+      }
+    }
+
+    // Keep profiles.gender in sync — see the matching comment in
+    // SupervisorRepository.update(). Employees whose login was created
+    // separately (createLogin) have a profile_id linking them here.
+    if (data.containsKey('gender')) {
+      final profileId = result['profile_id'] as String?;
+      if (profileId != null) {
+        await _client
+            .from('profiles')
+            .update({'gender': data['gender']})
+            .eq('id', profileId);
       }
     }
 
@@ -523,6 +557,7 @@ class SupervisorRepository {
     'mobile': supervisorData['mobile'],
     'assigned_area': supervisorData['assigned_area'],
     'monthly_salary': supervisorData['monthly_salary'] ?? 0,
+    'gender': supervisorData['gender'],
     'created_by': _client.auth.currentUser!.id,
   },
 );
@@ -568,6 +603,22 @@ class SupervisorRepository {
         .eq('id', id)
         .select()
         .single();
+
+    // Keep profiles.gender in sync — a couple of screens read gender from
+    // profiles as a fallback when a role-specific record isn't loaded
+    // yet, and letting it silently diverge from supervisors.gender is
+    // exactly what caused gender to look "unset" in some places and
+    // correctly-set in others for the same person.
+    if (data.containsKey('gender')) {
+      final profileId = result['profile_id'] as String?;
+      if (profileId != null) {
+        await _client
+            .from('profiles')
+            .update({'gender': data['gender']})
+            .eq('id', profileId);
+      }
+    }
+
     return SupervisorModel.fromJson(result);
   }
 
