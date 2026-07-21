@@ -32,7 +32,7 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<ExpenseModel>>> {
 
   void _subscribeRealtime() {
     _realtimeSub = _client
-        .channel('expenses_realtime_${DateTime.now().microsecondsSinceEpoch}')
+        .channel('expenses_realtime')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -790,7 +790,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
           await ref.read(expenseRepositoryProvider).update(exp.id, {
             'payment_status': 'paid',
             'payment_method': 'cash',
-            'payment_confirmed_at': DateTime.now().toIso8601String(),
+            'payment_confirmed_at': DateTime.now().toUtc().toIso8601String(),
             'payment_confirmed_by': ref.read(supabaseProvider).auth.currentUser?.id,
           });
           await ref.read(expensesProvider.notifier).refresh();
