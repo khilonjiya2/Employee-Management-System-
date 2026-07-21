@@ -29,7 +29,7 @@ class LocalDatabase {
 
     existing.add({
       ...data,
-      'saved_at': DateTime.now().toIso8601String(),
+      'saved_at': DateTime.now().toUtc().toIso8601String(),
     });
 
     await _prefs.setString(
@@ -75,7 +75,7 @@ class LocalDatabase {
 
     existing.add({
       ...data,
-      'saved_at': DateTime.now().toIso8601String(),
+      'saved_at': DateTime.now().toUtc().toIso8601String(),
     });
 
     await _prefs.setString(
@@ -125,7 +125,7 @@ class LocalDatabase {
       'entity_type': entityType,
       'action': action,
       'data': data,
-      'created_at': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
     });
 
     await _prefs.setString(
