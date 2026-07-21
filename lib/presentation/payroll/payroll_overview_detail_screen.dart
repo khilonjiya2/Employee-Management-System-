@@ -203,7 +203,7 @@ class _EmpPayrollRow extends ConsumerWidget {
                 await ref.read(payrollRepositoryProvider).update(payroll.id, {
                   'payment_status': 'paid',
                   'payment_method': 'cash',
-                  'paid_at': DateTime.now().toIso8601String(),
+                  'paid_at': DateTime.now().toUtc().toIso8601String(),
                   'status': 'paid',
                 });
                 ref.invalidate(payrollListProvider);
