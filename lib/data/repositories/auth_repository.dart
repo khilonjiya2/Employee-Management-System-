@@ -1857,27 +1857,35 @@ class WalletRepository {
     required double amount,
     required String note,
     required String createdBy,
+    required DateTime date,
   }) async {
     await _client.rpc('give_supervisor_advance', params: {
       'p_supervisor_id': supervisorId,
       'p_amount': amount,
       'p_note': note,
       'p_created_by': createdBy,
+      // The date the admin picked for this advance (defaults to today in
+      // the UI, but can be backdated freely) — NOT DateTime.now(). See the
+      // UTC-timestamp fix elsewhere in this file for why raw local
+      // DateTimes must never be sent directly: convert to UTC first.
+      'p_date': date.toUtc().toIso8601String(),
     });
   }
 
-  /// Edits the amount of a supervisor's MOST RECENT advance only — the
-  /// server-side function re-verifies this is actually the latest advance
-  /// and re-checks admin role itself, so this isn't just a client-side
-  /// convention. The wallet's balance/total_advanced are adjusted by the
-  /// difference automatically as part of the same RPC call.
-  Future<void> editLatestAdvance({
+  /// Edits ANY advance (not just the most recent one) — both its amount
+  /// and its date. The wallet's balance/total_advanced are adjusted by
+  /// the amount difference automatically as part of the same RPC call,
+  /// with no floor — the balance is allowed to go negative if an edit
+  /// makes that the mathematically correct result, by design.
+  Future<void> editAdvance({
     required String advanceId,
     required double newAmount,
+    required DateTime newDate,
   }) async {
-    await _client.rpc('edit_latest_supervisor_advance', params: {
+    await _client.rpc('edit_supervisor_advance', params: {
       'p_advance_id': advanceId,
       'p_new_amount': newAmount,
+      'p_new_date': newDate.toUtc().toIso8601String(),
     });
   }
 
