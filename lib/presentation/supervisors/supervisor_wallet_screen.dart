@@ -462,7 +462,7 @@ class _AddAdvanceSheetState extends ConsumerState<_AddAdvanceSheet> {
       // an advance — some may need to record advances given well in the
       // past that were never entered at the time.
       firstDate: DateTime(2000),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      lastDate: DateTime.now(), // no future dates — advances can only be dated up to today
     );
     if (picked != null) setState(() => _selectedDate = picked);
   }
@@ -618,7 +618,7 @@ class _EditAdvanceSheetState extends ConsumerState<_EditAdvanceSheet> {
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2000),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      lastDate: DateTime.now(), // no future dates — advances can only be dated up to today
     );
     if (picked != null) setState(() => _selectedDate = picked);
   }
