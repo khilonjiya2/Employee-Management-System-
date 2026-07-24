@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_utils.dart' as AppUtils;
@@ -317,15 +318,16 @@ class _SupervisorWalletScreenState
     );
   }
 
-  void _showEditAdvance(Map<String, dynamic> latestAdvanceEntry) {
+  void _showEditAdvance(Map<String, dynamic> advanceEntry) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => _EditAdvanceSheet(
-        advanceId: latestAdvanceEntry['id'] as String,
-        currentAmount: (latestAdvanceEntry['amount'] as num).toDouble(),
+        advanceId: advanceEntry['id'] as String,
+        currentAmount: (advanceEntry['amount'] as num).toDouble(),
+        currentDate: advanceEntry['date'] as DateTime,
         supervisorName: widget.supervisorName,
         onSuccess: () {
           ref.invalidate(supervisorWalletProvider(widget.supervisorId));
@@ -408,16 +410,13 @@ class _SupervisorWalletScreenState
                 : SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (ctx, i) {
-                        // Ledger is sorted newest-first, so the first
-                        // 'advance' entry encountered is the latest one —
-                        // the only one the backend will actually let an
-                        // admin edit.
-                        final isLatestAdvance = ledger[i]['type'] == 'advance' &&
-                            ledger.indexWhere((e) => e['type'] == 'advance') == i;
+                        // Every advance is now editable by an admin — not
+                        // just the latest one.
+                        final isAdvance = ledger[i]['type'] == 'advance';
                         return _LedgerTile(
                           entry: ledger[i],
-                          canEdit: isAdmin && isLatestAdvance,
-                          onEdit: isAdmin && isLatestAdvance
+                          canEdit: isAdmin && isAdvance,
+                          onEdit: isAdmin && isAdvance
                               ? () => _showEditAdvance(ledger[i])
                               : null,
                         );
@@ -452,7 +451,21 @@ class _AddAdvanceSheet extends ConsumerStatefulWidget {
 class _AddAdvanceSheetState extends ConsumerState<_AddAdvanceSheet> {
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
+  DateTime _selectedDate = DateTime.now();
   bool _loading = false;
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      // Deliberately no restriction on how far back an admin can backdate
+      // an advance — some may need to record advances given well in the
+      // past that were never entered at the time.
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) setState(() => _selectedDate = picked);
+  }
 
   @override
   void dispose() {
@@ -478,6 +491,7 @@ class _AddAdvanceSheetState extends ConsumerState<_AddAdvanceSheet> {
             ? 'Advance Payment'
             : _noteController.text.trim(),
         createdBy: profile!.id,
+        date: _selectedDate,
       );
       widget.onSuccess();
       if (mounted) {
@@ -540,6 +554,20 @@ class _AddAdvanceSheetState extends ConsumerState<_AddAdvanceSheet> {
                 borderRadius: BorderRadius.circular(12)),
           ),
         ),
+        const SizedBox(height: 12),
+        InkWell(
+          onTap: _pickDate,
+          borderRadius: BorderRadius.circular(12),
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'Date *',
+              prefixIcon: const Icon(Icons.calendar_today_rounded, size: 20),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(DateFormat('dd MMM yyyy').format(_selectedDate)),
+          ),
+        ),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
@@ -564,11 +592,13 @@ class _AddAdvanceSheetState extends ConsumerState<_AddAdvanceSheet> {
 class _EditAdvanceSheet extends ConsumerStatefulWidget {
   final String advanceId;
   final double currentAmount;
+  final DateTime currentDate;
   final String? supervisorName;
   final VoidCallback onSuccess;
   const _EditAdvanceSheet({
     required this.advanceId,
     required this.currentAmount,
+    required this.currentDate,
     this.supervisorName,
     required this.onSuccess,
   });
@@ -580,7 +610,18 @@ class _EditAdvanceSheet extends ConsumerStatefulWidget {
 class _EditAdvanceSheetState extends ConsumerState<_EditAdvanceSheet> {
   late final _amountController =
       TextEditingController(text: widget.currentAmount.toStringAsFixed(0));
+  late DateTime _selectedDate = widget.currentDate;
   bool _loading = false;
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) setState(() => _selectedDate = picked);
+  }
 
   @override
   void dispose() {
@@ -590,28 +631,39 @@ class _EditAdvanceSheetState extends ConsumerState<_EditAdvanceSheet> {
 
   Future<void> _submit() async {
     final newAmount = double.tryParse(_amountController.text.trim());
+    // No negative-amount check floor here beyond "not a valid number" —
+    // and deliberately no check against the wallet's current balance
+    // either. An edit is allowed to push the balance negative if that's
+    // the mathematically correct result of the correction being made;
+    // that's the admin's call to make, not something this form should
+    // silently block.
     if (newAmount == null || newAmount < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Enter a valid amount')));
       return;
     }
-    if (newAmount == widget.currentAmount) {
+    if (newAmount == widget.currentAmount &&
+        _selectedDate.year == widget.currentDate.year &&
+        _selectedDate.month == widget.currentDate.month &&
+        _selectedDate.day == widget.currentDate.day) {
       Navigator.of(context).pop();
       return;
     }
     setState(() => _loading = true);
     try {
-      await ref.read(walletRepositoryProvider).editLatestAdvance(
+      await ref.read(walletRepositoryProvider).editAdvance(
             advanceId: widget.advanceId,
             newAmount: newAmount,
+            newDate: _selectedDate,
           );
       widget.onSuccess();
       if (mounted) {
         Navigator.of(context).pop();
         final delta = newAmount - widget.currentAmount;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              'Advance updated — balance ${delta >= 0 ? "increased" : "decreased"} by ${AppUtils.CurrencyUtils.format(delta.abs())}'),
+          content: Text(delta == 0
+              ? 'Advance date updated'
+              : 'Advance updated — balance ${delta >= 0 ? "increased" : "decreased"} by ${AppUtils.CurrencyUtils.format(delta.abs())}'),
           backgroundColor: AppColors.success500,
         ));
       }
@@ -638,14 +690,14 @@ class _EditAdvanceSheetState extends ConsumerState<_EditAdvanceSheet> {
                 color: AppColors.secondary300,
                 borderRadius: BorderRadius.circular(2))),
         const SizedBox(height: 20),
-        Text('Edit Latest Advance - ${widget.supervisorName ?? ""}',
+        Text('Edit Advance - ${widget.supervisorName ?? ""}',
             style: const TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
                 fontFamily: 'Inter')),
         const SizedBox(height: 8),
         Text(
-          'Current: ${AppUtils.CurrencyUtils.format(widget.currentAmount)}. The wallet balance will adjust automatically by the difference.',
+          'Current: ${AppUtils.CurrencyUtils.format(widget.currentAmount)} on ${DateFormat('dd MMM yyyy').format(widget.currentDate)}. The wallet balance will adjust automatically by the difference — even if that takes it negative.',
           style: const TextStyle(fontSize: 12, color: AppColors.secondary500),
         ),
         const SizedBox(height: 20),
@@ -657,6 +709,20 @@ class _EditAdvanceSheetState extends ConsumerState<_EditAdvanceSheet> {
             labelText: 'New Amount *',
             prefixIcon: const Icon(Icons.currency_rupee_rounded),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        InkWell(
+          onTap: _pickDate,
+          borderRadius: BorderRadius.circular(12),
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'Date *',
+              prefixIcon: const Icon(Icons.calendar_today_rounded, size: 20),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(DateFormat('dd MMM yyyy').format(_selectedDate)),
           ),
         ),
         const SizedBox(height: 20),
