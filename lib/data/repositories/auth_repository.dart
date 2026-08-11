@@ -1941,3 +1941,122 @@ class WalletRepository {
     return ledger;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMPLOYEE PAYMENT REPOSITORY
+//
+// Parallel to WalletRepository above, but for paying employees directly.
+// Unlike supervisors (who spend down a running wallet balance via
+// expenses), employees just receive payments attributed to a specific
+// month — there's no balance/total_advanced/total_deducted to maintain,
+// just a log and monthly totals. See employee_payments_schema.sql for the
+// backing table and the give_employee_payment/edit_employee_payment RPCs
+// this repository calls.
+// ─────────────────────────────────────────────────────────────────────────────
+
+final employeePaymentRepositoryProvider = Provider<EmployeePaymentRepository>((ref) {
+  return EmployeePaymentRepository(ref.watch(supabaseProvider));
+});
+
+/// All payments for one employee, newest first — the raw transaction log.
+final employeePaymentsProvider = FutureProvider.autoDispose.family<List<EmployeePaymentModel>, String>((ref, employeeId) async {
+  return ref.read(employeePaymentRepositoryProvider).getPayments(employeeId);
+});
+
+/// Payments grouped by month for one employee — "amount paid per month,
+/// till date" exactly as requested, most recent month first.
+final employeeMonthlyPaymentSummaryProvider = FutureProvider.autoDispose.family<List<MonthlyPaymentSummary>, String>((ref, employeeId) async {
+  final payments = await ref.read(employeePaymentRepositoryProvider).getPayments(employeeId);
+  final Map<String, MonthlyPaymentSummary> byMonth = {};
+  for (final p in payments) {
+    final key = '${p.paymentYear}-${p.paymentMonth}';
+    final existing = byMonth[key];
+    if (existing == null) {
+      byMonth[key] = MonthlyPaymentSummary(
+        month: p.paymentMonth,
+        year: p.paymentYear,
+        totalAmount: p.amount,
+        paymentCount: 1,
+      );
+    } else {
+      byMonth[key] = existing.copyWith(
+        totalAmount: existing.totalAmount + p.amount,
+        paymentCount: existing.paymentCount + 1,
+      );
+    }
+  }
+  final list = byMonth.values.toList();
+  list.sort((a, b) {
+    if (a.year != b.year) return b.year.compareTo(a.year);
+    return b.month.compareTo(a.month);
+  });
+  return list;
+});
+
+class EmployeePaymentRepository {
+  final SupabaseClient _client;
+  EmployeePaymentRepository(this._client);
+
+  Future<List<EmployeePaymentModel>> getPayments(String employeeId) async {
+    final data = await _client
+        .from('employee_payments')
+        .select('*, profiles(full_name)')
+        .eq('employee_id', employeeId)
+        .order('created_at', ascending: false);
+    return (data as List)
+        .map((e) => EmployeePaymentModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<double> getTotalPaid(String employeeId) async {
+    final data = await _client
+        .from('employee_payments')
+        .select('amount')
+        .eq('employee_id', employeeId);
+    return (data as List)
+        .fold<double>(0, (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0));
+  }
+
+  Future<void> givePayment({
+    required String employeeId,
+    required double amount,
+    required int month,
+    required int year,
+    required String note,
+    required String createdBy,
+    required DateTime date,
+  }) async {
+    await _client.rpc('give_employee_payment', params: {
+      'p_employee_id': employeeId,
+      'p_amount': amount,
+      'p_month': month,
+      'p_year': year,
+      'p_note': note,
+      'p_created_by': createdBy,
+      // Never send a raw local DateTime — see the UTC-timestamp fix
+      // elsewhere in this file for why that silently shifts stored times
+      // by 5.5 hours.
+      'p_date': date.toUtc().toIso8601String(),
+    });
+  }
+
+  /// Edits ANY existing payment — amount, date, and/or which month it's
+  /// attributed to. No wallet balance to adjust (unlike
+  /// editAdvance/edit_supervisor_advance) since employee payments don't
+  /// have a running balance — this just updates the row directly.
+  Future<void> editPayment({
+    required String paymentId,
+    required double newAmount,
+    required DateTime newDate,
+    int? newMonth,
+    int? newYear,
+  }) async {
+    await _client.rpc('edit_employee_payment', params: {
+      'p_payment_id': paymentId,
+      'p_new_amount': newAmount,
+      'p_new_date': newDate.toUtc().toIso8601String(),
+      if (newMonth != null) 'p_new_month': newMonth,
+      if (newYear != null) 'p_new_year': newYear,
+    });
+  }
+}
