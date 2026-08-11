@@ -1106,3 +1106,88 @@ class AdvancePaymentModel extends Equatable {
   @override
   List<Object?> get props => [id, supervisorId, amount, createdAt];
 }
+
+/// A single payment made to an employee — the direct parallel to
+/// AdvancePaymentModel above, but for employees. See
+/// employee_payments_schema.sql for the backing table.
+class EmployeePaymentModel extends Equatable {
+  final String id;
+  final String employeeId;
+  final String? companyId;
+  final double amount;
+  final int paymentMonth;
+  final int paymentYear;
+  final String? note;
+  final String? createdBy;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String? createdByName;
+
+  const EmployeePaymentModel({
+    required this.id,
+    required this.employeeId,
+    this.companyId,
+    required this.amount,
+    required this.paymentMonth,
+    required this.paymentYear,
+    this.note,
+    this.createdBy,
+    required this.createdAt,
+    required this.updatedAt,
+    this.createdByName,
+  });
+
+  factory EmployeePaymentModel.fromJson(Map<String, dynamic> json) =>
+      EmployeePaymentModel(
+        id: json['id'] as String,
+        employeeId: json['employee_id'] as String,
+        companyId: json['company_id'] as String?,
+        amount: (json['amount'] as num?)?.toDouble() ?? 0,
+        paymentMonth: json['payment_month'] as int,
+        paymentYear: json['payment_year'] as int,
+        note: json['note'] as String?,
+        createdBy: json['created_by'] as String?,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        updatedAt: json['updated_at'] != null
+            ? DateTime.parse(json['updated_at'] as String)
+            : DateTime.parse(json['created_at'] as String),
+        createdByName: json['profiles'] != null
+            ? (json['profiles'] as Map)['full_name'] as String?
+            : null,
+      );
+
+  @override
+  List<Object?> get props =>
+      [id, employeeId, amount, paymentMonth, paymentYear, createdAt, updatedAt];
+}
+
+/// One month's aggregated payment total for an employee — "amount paid
+/// and the month paid, till date" as a rolled-up view rather than the
+/// raw transaction log.
+class MonthlyPaymentSummary extends Equatable {
+  final int month;
+  final int year;
+  final double totalAmount;
+  final int paymentCount;
+
+  const MonthlyPaymentSummary({
+    required this.month,
+    required this.year,
+    required this.totalAmount,
+    required this.paymentCount,
+  });
+
+  MonthlyPaymentSummary copyWith({
+    double? totalAmount,
+    int? paymentCount,
+  }) =>
+      MonthlyPaymentSummary(
+        month: month,
+        year: year,
+        totalAmount: totalAmount ?? this.totalAmount,
+        paymentCount: paymentCount ?? this.paymentCount,
+      );
+
+  @override
+  List<Object?> get props => [month, year, totalAmount, paymentCount];
+}
