@@ -19,6 +19,7 @@ import '../../presentation/dashboard/employee_dashboard_screen.dart';
 import '../../presentation/employees/employees_list_screen.dart';
 import '../../presentation/employees/employee_form_screen.dart';
 import '../../presentation/employees/employee_detail_screen.dart';
+import '../../presentation/employees/employee_payment_screen.dart';
 
 import '../../presentation/supervisors/supervisors_list_screen.dart';
 import '../../presentation/supervisors/supervisor_employees_screen.dart';
@@ -223,6 +224,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: ':id/edit',
                 builder: (_, state) => EmployeeFormScreen(
                     employeeId: state.pathParameters['id']!),
+              ),
+              GoRoute(
+                name: 'employee-payments',
+                path: ':id/payments',
+                builder: (_, state) {
+                  final extra = state.extra as Map<String, dynamic>?;
+                  return EmployeePaymentScreen(
+                    employeeId: state.pathParameters['id']!,
+                    employeeName: extra?['name'] as String?,
+                    employeeGender: extra?['gender'] as String?,
+                    employeePhotoUrl: extra?['photoUrl'] as String?,
+                  );
+                },
               ),
             ],
           ),
