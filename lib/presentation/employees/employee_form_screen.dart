@@ -530,6 +530,15 @@ class EmployeeDetailScreen extends ConsumerWidget {
         title: const Text('Employee Details'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            tooltip: 'Payments',
+            onPressed: () => context.push('/employees/$id/payments', extra: {
+              'name': employee.valueOrNull?.name,
+              'gender': employee.valueOrNull?.gender,
+              'photoUrl': employee.valueOrNull?.employeePhotoUrl,
+            }),
+          ),
+          IconButton(
             icon: const Icon(Icons.edit_outlined),
             onPressed: () => context.push('/employees/$id/edit'),
           ),
