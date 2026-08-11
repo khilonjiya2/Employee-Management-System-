@@ -695,11 +695,6 @@ class _EditAdvanceSheetState extends ConsumerState<_EditAdvanceSheet> {
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
                 fontFamily: 'Inter')),
-        const SizedBox(height: 8),
-        Text(
-          'Current: ${AppUtils.CurrencyUtils.format(widget.currentAmount)} on ${DateFormat('dd MMM yyyy').format(widget.currentDate)}. The wallet balance will adjust automatically by the difference — even if that takes it negative.',
-          style: const TextStyle(fontSize: 12, color: AppColors.secondary500),
-        ),
         const SizedBox(height: 20),
         TextField(
           controller: _amountController,
